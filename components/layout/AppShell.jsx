@@ -3,34 +3,44 @@ import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import { useNotifications } from '@/lib/useNotifications';
+import { DeadlineAlertsProvider } from '@/lib/useDeadlineAlerts';
 
 export default function AppShell({ children }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen,     setSidebarOpen]     = useState(false);   // mobile slide
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);  // desktop collapse
   const pathname = usePathname();
+  useNotifications();
 
-  // 라우트 이동 시 모바일 사이드바 자동 닫기
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
   return (
-    <div className="flex h-full" style={{ background: 'var(--bg)' }}>
+    <DeadlineAlertsProvider>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* 전체 폭 헤더 */}
+      <Header onMenuClick={() => setSidebarOpen(p => !p)} />
 
-      {/* 모바일 오버레이 */}
-      {sidebarOpen && (
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        {/* 모바일 오버레이 */}
         <div
-          className="fixed inset-0 bg-black/30 z-30 md:hidden"
+          className={`app-overlay${sidebarOpen ? ' open' : ''}`}
           onClick={() => setSidebarOpen(false)}
         />
-      )}
 
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        {/* 사이드바 */}
+        <Sidebar
+          open={sidebarOpen}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(p => !p)}
+          onClose={() => setSidebarOpen(false)}
+        />
 
-      {/* 콘텐츠 영역 */}
-      <div className="flex flex-col flex-1 min-w-0 min-h-0">
-        <Header onMenuClick={() => setSidebarOpen(p => !p)} />
-        <main className="flex-1 overflow-auto">
+        {/* 메인 콘텐츠 */}
+        <main style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
           {children}
         </main>
       </div>
     </div>
+    </DeadlineAlertsProvider>
   );
 }

@@ -170,7 +170,7 @@ export default function LandingPage() {
 
       {/* ── NAV ── */}
       <nav style={{ position:'fixed', top:0, left:0, right:0, zIndex:100, height:'64px', display:'flex', alignItems:'center', background:'rgba(7,7,17,0.8)', backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 w-full flex items-center justify-between">
+        <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'0 24px', width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
             <Logo size={32} gradId="navLg" />
             <span style={{ fontWeight:800, fontSize:'17px', letterSpacing:'-0.025em', color:TEXT }}>
@@ -193,8 +193,8 @@ export default function LandingPage() {
 
       {/* ── HERO ── */}
       <section style={{ position:'relative', zIndex:1, paddingTop:'148px', paddingBottom:'88px' }}>
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 lg:px-14">
-          <div className="grid lg:grid-cols-2 gap-14 items-center">
+        <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'0 48px' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'56px', alignItems:'center' }}>
 
             {/* copy */}
             <div className="animate-fade-up">
@@ -229,7 +229,7 @@ export default function LandingPage() {
             </div>
 
             {/* mockup */}
-            <div className="animate-float hidden sm:block" style={{ filter:'drop-shadow(0 40px 60px rgba(99,102,241,0.15))' }}>
+            <div style={{ filter:'drop-shadow(0 40px 60px rgba(99,102,241,0.15))' }}>
               <CalendarMockup />
             </div>
           </div>
@@ -238,7 +238,7 @@ export default function LandingPage() {
 
       {/* ── FEATURES ── */}
       <section style={{ position:'relative', zIndex:1, paddingTop:'88px', paddingBottom:'88px' }}>
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 lg:px-14">
+        <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'0 48px' }}>
           <div style={{ textAlign:'center', marginBottom:'56px' }}>
             <div style={{ display:'inline-flex', alignItems:'center', gap:'6px', background:'rgba(139,92,246,0.12)', border:'1px solid rgba(139,92,246,0.25)', borderRadius:'999px', padding:'5px 14px', marginBottom:'16px', fontSize:'12px', fontWeight:700, color:'#c4b5fd', letterSpacing:'0.04em' }}>
               ✦&nbsp; 핵심 기능
@@ -251,7 +251,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'20px' }}>
             {FEATURES.map(f=>(
               <div key={f.title} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:'16px', padding:'24px', transition:'border-color .2s, transform .2s', cursor:'default' }}
                 onMouseEnter={undefined}>
@@ -268,7 +268,7 @@ export default function LandingPage() {
 
       {/* ── PRICING ── */}
       <section style={{ position:'relative', zIndex:1, paddingTop:'88px', paddingBottom:'88px', background:'rgba(255,255,255,0.015)', borderTop:'1px solid rgba(255,255,255,0.05)', borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 lg:px-14">
+        <div style={{ maxWidth:'1100px', margin:'0 auto', padding:'0 48px' }}>
           <div style={{ textAlign:'center', marginBottom:'56px' }}>
             <div style={{ display:'inline-flex', alignItems:'center', gap:'6px', background:'rgba(16,185,129,0.12)', border:'1px solid rgba(16,185,129,0.25)', borderRadius:'999px', padding:'5px 14px', marginBottom:'16px', fontSize:'12px', fontWeight:700, color:'#6ee7b7', letterSpacing:'0.04em' }}>
               ✦&nbsp; 요금제
@@ -279,7 +279,7 @@ export default function LandingPage() {
             <p style={{ fontSize:'16px', color:MUTED }}>무료로 시작하고, 필요할 때 업그레이드하세요.</p>
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-6">
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'24px' }}>
             {PLANS.map(p=>{
               if (p.featured) return (
                 <div key={p.name} style={{ background:'linear-gradient(135deg,#6366f1,#8b5cf6)', padding:'1.5px', borderRadius:'20px', boxShadow:'0 0 48px rgba(99,102,241,0.3)' }}>
@@ -307,7 +307,7 @@ export default function LandingPage() {
 
       {/* ── CTA ── */}
       <section style={{ position:'relative', zIndex:1, paddingTop:'88px', paddingBottom:'88px' }}>
-        <div className="max-w-3xl mx-auto px-5 sm:px-8" style={{ textAlign:'center' }}>
+        <div style={{ maxWidth:'720px', margin:'0 auto', padding:'0 48px', textAlign:'center' }}>
           <div style={{ background:'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.12))', border:'1px solid rgba(99,102,241,0.22)', borderRadius:'28px', padding:'60px 32px', position:'relative', overflow:'hidden' }}>
             <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse at 50% 0%, rgba(99,102,241,0.1), transparent 60%)', pointerEvents:'none' }} />
             <h2 style={{ fontSize:'clamp(1.8rem,4vw,2.8rem)', fontWeight:900, letterSpacing:'-0.03em', marginBottom:'14px', position:'relative' }}>
@@ -325,7 +325,7 @@ export default function LandingPage() {
 
       {/* ── FOOTER ── */}
       <footer style={{ borderTop:'1px solid rgba(255,255,255,0.06)', paddingTop:'32px', paddingBottom:'32px', position:'relative', zIndex:1 }}>
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 lg:px-14 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'0 48px', display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'space-between', gap:'16px' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
             <Logo size={24} gradId="footLg" />
             <span style={{ fontWeight:800, fontSize:'15px', color:TEXT }}>

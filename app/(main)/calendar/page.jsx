@@ -5,6 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import { getTasksByDateRange, getTasksByDate, toggleComplete } from '@/models/taskModel';
 import TaskModal from '@/components/task/TaskModal';
+import { downloadICS } from '@/lib/exportICS';
+import { useDeadlineAlerts } from '@/lib/useDeadlineAlerts';
 
 const DAYS   = ['일','월','화','수','목','금','토'];
 const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
@@ -33,19 +35,33 @@ function toDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
+function getDeadlineInfo(task) {
+  if (!task.deadline) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dl = new Date(task.deadline + 'T00:00:00');
+  const diff = Math.round((dl - today) / 86400000);
+  if (diff < 0)   return { cls: 'dl-overdue', label: `D+${Math.abs(diff)}` };
+  if (diff === 0) return { cls: 'dl-today',   label: 'D-Day' };
+  if (diff <= 3)  return { cls: 'dl-soon',    label: `D-${diff}` };
+  if (diff <= 7)  return { cls: 'dl-near',    label: `D-${diff}` };
+  if (diff <= 14) return { cls: 'dl-week',    label: `D-${diff}` };
+  return null;
+}
+
 export default function CalendarPageWrapper() {
   return <Suspense><CalendarPage /></Suspense>;
 }
 
 function CalendarPage() {
   const { user } = useAuth();
+  const { refresh: refreshAlerts } = useDeadlineAlerts();
   const searchParams = useSearchParams();
   const now = new Date();
 
-  const [mode,       setMode]       = useState('month');
-  const [year,       setYear]       = useState(now.getFullYear());
-  const [month,      setMonth]      = useState(now.getMonth());
-  const [weekStart,  setWeekStart]  = useState(() => {
+  const [mode,      setMode]      = useState('month');
+  const [year,      setYear]      = useState(now.getFullYear());
+  const [month,     setMonth]     = useState(now.getMonth());
+  const [weekStart, setWeekStart] = useState(() => {
     const d = new Date(now);
     d.setHours(0,0,0,0);
     d.setDate(d.getDate() - d.getDay());
@@ -92,6 +108,7 @@ function CalendarPage() {
   async function handleToggle(id, cur) {
     await toggleComplete(id, cur);
     loadTasks();
+    refreshAlerts();
     if (dayPanel) {
       const data = await getTasksByDate(user.id, dayPanel);
       setDayTasks(data);
@@ -166,15 +183,33 @@ function CalendarPage() {
             </span>
             <button className="icon-btn" onClick={() => navigate(1)}><i className="fas fa-chevron-right" /></button>
             <button className="btn-secondary btn-sm" onClick={goToday}>오늘</button>
+            <button
+              className="btn-secondary btn-sm"
+              title="현재 기간 ICS 내보내기"
+              onClick={() => {
+                if (tasks.length === 0) { alert('내보낼 일정이 없습니다.'); return; }
+                downloadICS(tasks, `calendar_${label.replace(/\s/g,'')}.ics`);
+              }}
+            >
+              <i className="fas fa-file-export" />
+            </button>
           </div>
         </div>
 
         <div className="card" style={{ flex: 1, padding: 0, overflow: 'auto', marginTop: 12 }}>
           {mode === 'month' && (
-            <MonthView year={year} month={month} tasks={tasks} todayStr={todayStr} onDayClick={openDayPanel} />
+            <MonthView
+              year={year} month={month} tasks={tasks}
+              todayStr={todayStr} onDayClick={openDayPanel}
+              onAddClick={ds => setModal({ _date: ds })}
+            />
           )}
           {mode === 'week' && (
-            <WeekView weekStart={weekStart} tasks={tasks} todayStr={todayStr} onDayClick={openDayPanel} />
+            <WeekView
+              weekStart={weekStart} tasks={tasks}
+              todayStr={todayStr} onDayClick={openDayPanel}
+              onAddClick={ds => setModal({ _date: ds })}
+            />
           )}
           {mode === 'year' && (
             <YearView year={year} tasks={tasks} todayStr={todayStr} onMonthClick={m => { setMode('month'); setMonth(m); }} />
@@ -201,38 +236,51 @@ function CalendarPage() {
             <p style={{ color: 'var(--text-sub)', fontSize: '0.83rem', textAlign: 'center', padding: '16px 0' }}>
               할일이 없습니다
             </p>
-          ) : dayTasks.map(t => (
-            <div
-              key={t.id}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 10px', borderRadius: 'var(--radius-sm)',
-                background: 'var(--bg)', cursor: 'pointer',
-                borderLeft: `3px solid ${t.color || 'var(--indigo-500)'}`,
-              }}
-              onClick={() => setModal(t)}
-            >
-              <button
-                onClick={e => { e.stopPropagation(); handleToggle(t.id, t.completed); }}
+          ) : dayTasks.map(t => {
+            const dl = getDeadlineInfo(t);
+            return (
+              <div
+                key={t.id}
                 style={{
-                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                  border: `2px solid ${t.completed ? 'var(--indigo-600)' : 'var(--border)'}`,
-                  background: t.completed ? 'var(--indigo-600)' : 'transparent',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff', fontSize: '0.6rem',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                  background: 'var(--bg)', cursor: 'pointer',
+                  borderLeft: `3px solid ${t.color || 'var(--indigo-500)'}`,
                 }}
+                onClick={() => setModal(t)}
               >
-                {t.completed && <i className="fas fa-check" />}
-              </button>
-              <span style={{
-                flex: 1, fontSize: '0.83rem', color: 'var(--text)',
-                textDecoration: t.completed ? 'line-through' : 'none',
-                opacity: t.completed ? 0.5 : 1,
-              }}>
-                {t.title}
-              </span>
-            </div>
-          ))}
+                <button
+                  onClick={e => { e.stopPropagation(); handleToggle(t.id, t.completed); }}
+                  style={{
+                    width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                    border: `2px solid ${t.completed ? 'var(--indigo-600)' : 'var(--border)'}`,
+                    background: t.completed ? 'var(--indigo-600)' : 'transparent',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#fff', fontSize: '0.6rem',
+                  }}
+                >
+                  {t.completed && <i className="fas fa-check" />}
+                </button>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: '0.83rem', color: 'var(--text)',
+                    textDecoration: t.completed ? 'line-through' : 'none',
+                    opacity: t.completed ? 0.5 : 1,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {t.recurrence && t.recurrence !== 'none' && <i className="fas fa-repeat" style={{ fontSize: '0.62rem', marginRight: 4, color: 'var(--primary)', opacity: 0.7 }} />}
+                    {t.title}
+                  </div>
+                  {(t.due_time || dl) && (
+                    <div style={{ fontSize: '0.73rem', color: 'var(--text-sub)', marginTop: 2, display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {t.due_time && <span style={{ color: 'var(--indigo-600)' }}><i className="fas fa-clock" style={{ marginRight: 3 }} />{t.due_time}</span>}
+                      {dl && <span className={`deadline-badge ${dl.cls}`} style={{ fontSize: '0.7rem', padding: '1px 6px' }}><i className="fas fa-flag" /> {dl.label}</span>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -256,7 +304,7 @@ function CalendarPage() {
 }
 
 /* ── 월 뷰 ── */
-function MonthView({ year, month, tasks, todayStr, onDayClick }) {
+function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick }) {
   const firstDay    = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const prevDays    = new Date(year, month, 0).getDate();
@@ -287,25 +335,19 @@ function MonthView({ year, month, tasks, todayStr, onDayClick }) {
   return (
     <div>
       {/* 요일 헤더 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
-        {DAYS.map((d, di) => (
-          <div key={d} style={{
-            padding: '8px 0', textAlign: 'center', fontSize: '0.78rem', fontWeight: 600,
-            color: di === 0 ? 'var(--red-500)' : di === 6 ? 'var(--indigo-600)' : 'var(--text-sub)',
-            borderRight: di < 6 ? '1px solid var(--border)' : 'none',
-            borderBottom: '1px solid var(--border)', background: 'var(--surface)',
-          }}>{d}</div>
-        ))}
+      <div className="full-grid">
+        {DAYS.map(d => <div key={d} className="cal-hdr-cell">{d}</div>)}
       </div>
 
       {/* 주 행 */}
       {weeks.map((week, wi) => {
         const weekDs    = week.map(c => c.ds).filter(Boolean);
-        const weekStart = weekDs[0];
-        const weekEnd   = weekDs[weekDs.length - 1];
-        const weekSpans = weekStart && weekEnd
-          ? spanTasks.filter(t => t.date <= weekEnd && t.deadline >= weekStart)
+        const wStart    = weekDs[0];
+        const wEnd      = weekDs[weekDs.length - 1];
+        const weekSpans = wStart && wEnd
+          ? spanTasks.filter(t => t.date <= wEnd && t.deadline >= wStart)
           : [];
+        const spanCount = weekSpans.length;
 
         return (
           <div key={wi} style={{ position: 'relative' }}>
@@ -319,18 +361,21 @@ function MonthView({ year, month, tasks, todayStr, onDayClick }) {
               const width   = `${((realEnd - startIdx + 1) / 7) * 100}%`;
               const isStart = week[startIdx]?.ds === span.date;
               const isEnd   = week[realEnd]?.ds === span.deadline;
+              const isSolo  = isStart && isEnd;
               return (
-                <div key={span.id} style={{
-                  position: 'absolute',
-                  top: `${30 + si * 18}px`,
-                  left, width, zIndex: 2, pointerEvents: 'none', height: 16,
-                  background: span.color || 'var(--indigo-500)',
-                  borderRadius: `${isStart ? 4 : 0}px ${isEnd ? 4 : 0}px ${isEnd ? 4 : 0}px ${isStart ? 4 : 0}px`,
-                  opacity: span.completed ? 0.4 : 0.85,
-                  display: 'flex', alignItems: 'center', overflow: 'hidden',
-                }}>
+                <div
+                  key={span.id}
+                  className={`span-bar${isSolo ? ' span-solo' : isStart ? ' span-start' : isEnd ? ' span-end' : ''}`}
+                  style={{
+                    position: 'absolute',
+                    top: `${30 + si * 18}px`,
+                    left, width, zIndex: 2, pointerEvents: 'none',
+                    background: span.color || 'var(--indigo-500)',
+                    opacity: span.completed ? 0.4 : 0.85,
+                  }}
+                >
                   {isStart && (
-                    <span style={{ fontSize: '0.65rem', color: '#fff', padding: '0 5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span style={{ fontSize: '0.65rem', color: '#fff', padding: '0 5px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {span.title}
                     </span>
                   )}
@@ -342,64 +387,63 @@ function MonthView({ year, month, tasks, todayStr, onDayClick }) {
             })}
 
             {/* 날짜 셀 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
+            <div className="full-grid">
               {week.map((cell, ci) => {
-                const globalIdx = wi * 7 + ci;
-                const cellTasks = cell.ds ? (taskMap[cell.ds] || []) : [];
-                const isToday   = cell.ds === todayStr;
-                const holiday   = cell.ds ? KO_HOLIDAYS[cell.ds] : null;
-                const spanCount = weekSpans.length;
-                const dateMarginBottom = spanCount > 0 ? `${spanCount * 18 + 4}px` : '4px';
+                const cellTasks    = cell.ds ? (taskMap[cell.ds] || []) : [];
+                const isToday      = cell.ds === todayStr;
+                const holiday      = cell.ds ? KO_HOLIDAYS[cell.ds] : null;
+                const isSun        = ci === 0;
+                const isSat        = ci === 6;
+                const isHolidayDay = holiday || isSun;
 
                 return (
                   <div
-                    key={globalIdx}
+                    key={wi * 7 + ci}
+                    className={[
+                      'full-cell',
+                      cell.other   ? 'other-month'  : '',
+                      isToday      ? 'today'         : '',
+                      isHolidayDay ? 'holiday-cell'  : '',
+                    ].filter(Boolean).join(' ')}
                     onClick={() => cell.ds && onDayClick(cell.ds)}
-                    style={{
-                      minHeight: 90,
-                      paddingTop: 6, paddingLeft: 8, paddingRight: 8, paddingBottom: 6,
-                      cursor: cell.ds ? 'pointer' : 'default',
-                      borderRight: (globalIdx + 1) % 7 !== 0 ? '1px solid var(--border)' : 'none',
-                      borderBottom: '1px solid var(--border)',
-                      background: cell.other ? 'rgba(0,0,0,0.02)' : 'var(--surface)',
-                      transition: 'background 150ms',
-                    }}
-                    onMouseEnter={e => { if (cell.ds) e.currentTarget.style.background = 'var(--indigo-50)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = cell.other ? 'rgba(0,0,0,0.02)' : 'var(--surface)'; }}
                   >
-                    <div style={{
-                      width: 24, height: 24, borderRadius: '50%',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '0.78rem', fontWeight: isToday ? 700 : 400,
-                      background: isToday ? 'var(--indigo-600)' : 'transparent',
-                      color: isToday ? '#fff' : cell.other ? 'var(--text-sub)' : 'var(--text)',
-                      marginBottom: dateMarginBottom,
-                    }}>{cell.d}</div>
+                    <div
+                      className="cell-head-row"
+                      style={spanCount > 0 ? { marginBottom: `${spanCount * 18 + 4}px` } : undefined}
+                    >
+                      <span className={`cell-num${isHolidayDay ? ' holiday-num' : isSat ? ' saturday-num' : ''}`}>
+                        {cell.d}
+                      </span>
+                      {cell.ds && (
+                        <button
+                          className="cell-add-btn"
+                          onClick={e => { e.stopPropagation(); onAddClick(cell.ds); }}
+                        >
+                          <i className="fas fa-plus" />
+                        </button>
+                      )}
+                    </div>
 
-                    {holiday && (
-                      <div style={{
-                        fontSize: '0.6rem', color: '#dc2626', fontWeight: 600,
-                        marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      }}>
-                        {holiday}
-                      </div>
-                    )}
+                    {holiday && <div className="cell-holiday-name">{holiday}</div>}
 
-                    {cellTasks.slice(0, 2).map(t => (
-                      <div key={t.id} style={{
-                        fontSize: '0.68rem', padding: '1px 4px', borderRadius: 2, marginBottom: 2,
-                        borderLeft: `3px solid ${t.color || 'var(--indigo-500)'}`,
-                        color: 'var(--text)',
-                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        textDecoration: t.completed ? 'line-through' : 'none',
-                        opacity: t.completed ? 0.55 : 1, lineHeight: '1.5',
-                      }}>
-                        {t.title}
-                      </div>
-                    ))}
-                    {cellTasks.length > 2 && (
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-sub)' }}>+{cellTasks.length - 2}</div>
-                    )}
+                    <div className="cell-tasks">
+                      {cellTasks.slice(0, 2).map(t => {
+                        const dl = getDeadlineInfo(t);
+                        return (
+                          <div
+                            key={t.id}
+                            className={`cell-task ${t.priority || 'low'}${t.completed ? ' done' : ''}`}
+                            style={t.color ? { borderLeft: `3px solid ${t.color}` } : undefined}
+                          >
+                              {t.recurrence && t.recurrence !== 'none' && <i className="fas fa-repeat" style={{ fontSize: '0.6rem', marginRight: 3, opacity: 0.6 }} />}
+                            {t.title}{dl && <> <span className={`cell-dl ${dl.cls}`}>{dl.label}</span></>}
+                          </div>
+                        );
+                      })}
+                      {cellTasks.length > 2 && (
+                        <div className="more-label">+{cellTasks.length - 2}</div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -412,60 +456,101 @@ function MonthView({ year, month, tasks, todayStr, onDayClick }) {
 }
 
 /* ── 주 뷰 ── */
-function WeekView({ weekStart, tasks, todayStr, onDayClick }) {
+function WeekView({ weekStart, tasks, todayStr, onDayClick, onAddClick }) {
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart); d.setDate(d.getDate() + i);
     return { d, ds: toDateStr(d) };
   });
+  const weekStartStr = toDateStr(weekStart);
+  const weekEndDate  = new Date(weekStart); weekEndDate.setDate(weekEndDate.getDate() + 6);
+  const weekEndStr   = toDateStr(weekEndDate);
+
+  const spanTasks = tasks.filter(t => t.deadline && t.deadline > t.date &&
+    t.date <= weekEndStr && t.deadline >= weekStartStr);
+  const spanIds = new Set(spanTasks.map(t => t.id));
+
   const taskMap = {};
-  tasks.forEach(t => { if (!taskMap[t.date]) taskMap[t.date] = []; taskMap[t.date].push(t); });
+  tasks.forEach(t => {
+    if (spanIds.has(t.id)) return;
+    if (!taskMap[t.date]) taskMap[t.date] = [];
+    taskMap[t.date].push(t);
+  });
+
+  const spanBarH = spanTasks.length > 0 ? spanTasks.length * 20 + 6 : 0;
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', minHeight: 400 }}>
-      {weekDays.map(({ d, ds }, idx) => {
-        const isToday  = ds === todayStr;
-        const dayTasks = taskMap[ds] || [];
-        return (
-          <div
-            key={ds}
-            onClick={() => onDayClick(ds)}
-            style={{
-              borderRight: idx < 6 ? '1px solid var(--border)' : 'none',
-              cursor: 'pointer',
-              background: isToday ? 'rgba(99,102,241,0.04)' : 'var(--surface)',
-            }}
-          >
-            <div style={{
-              padding: '10px 8px 8px', borderBottom: '1px solid var(--border)', textAlign: 'center',
-              background: isToday ? 'rgba(99,102,241,0.08)' : 'transparent',
-            }}>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-sub)', marginBottom: 4 }}>{DAYS[d.getDay()]}</div>
-              <div style={{
-                width: 28, height: 28, borderRadius: '50%', margin: '0 auto',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.85rem', fontWeight: 700,
-                background: isToday ? 'var(--indigo-600)' : 'transparent',
-                color: isToday ? '#fff' : 'var(--text)',
-              }}>{d.getDate()}</div>
-              {KO_HOLIDAYS[ds] && (
-                <div style={{ fontSize: '0.58rem', color: '#dc2626', fontWeight: 600, marginTop: 2, lineHeight: 1.2 }}>
-                  {KO_HOLIDAYS[ds]}
-                </div>
-              )}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      {/* 기간 일정 바 */}
+      {spanTasks.length > 0 && (
+        <div style={{ position: 'relative', height: spanBarH, flexShrink: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+          {spanTasks.map((span, si) => {
+            let startIdx = weekDays.findIndex(wd => wd.ds >= span.date);
+            if (startIdx < 0) startIdx = 0;
+            let endIdx = 6;
+            for (let i = 6; i >= 0; i--) {
+              if (weekDays[i].ds <= span.deadline) { endIdx = i; break; }
+            }
+            const count   = endIdx - startIdx + 1;
+            const left    = `${(startIdx / 7) * 100}%`;
+            const width   = `${(count   / 7) * 100}%`;
+            const isStart = weekDays[startIdx]?.ds === span.date;
+            const isEnd   = weekDays[endIdx]?.ds   === span.deadline;
+            const isSolo  = isStart && isEnd;
+            return (
+              <div
+                key={span.id}
+                className={`span-bar${isSolo ? ' span-solo' : isStart ? ' span-start' : isEnd ? ' span-end' : ''}`}
+                style={{
+                  position: 'absolute', top: si * 20 + 3,
+                  left, width, zIndex: 2,
+                  background: span.color || 'var(--indigo-500)',
+                  opacity: span.completed ? 0.4 : 0.85,
+                }}
+              >
+                <span style={{ fontSize: '0.65rem', color: '#fff', padding: '0 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                  {isStart ? span.title : (isEnd ? '🏁' : '')}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="week-grid" style={{ flex: 1, minHeight: 0 }}>
+        {weekDays.map(({ d, ds }) => {
+          const isToday      = ds === todayStr;
+          const dayTasks     = taskMap[ds] || [];
+          const holiday      = KO_HOLIDAYS[ds];
+          const isHolidayDay = holiday || d.getDay() === 0;
+          return (
+            <div key={ds} className={['week-col', isToday ? 'today' : '', isHolidayDay ? 'holiday' : ''].filter(Boolean).join(' ')}>
+              <div className={`week-col-hdr${isToday ? ' today' : ''}`} onClick={() => onDayClick(ds)}>
+                <span className="week-dow">{DAYS[d.getDay()]}</span>
+                <span className={`week-date-num${isToday ? ' today-circle' : ''}`}>{d.getDate()}</span>
+                {holiday && <div className="week-holiday-name">{holiday}</div>}
+              </div>
+              <div className="week-col-body" onClick={() => onDayClick(ds)}>
+                {dayTasks.map(t => (
+                  <div
+                    key={t.id}
+                    className={`week-task ${t.priority || 'low'}${t.completed ? ' done' : ''}`}
+                    style={t.color ? { borderLeft: `3px solid ${t.color}` } : undefined}
+                  >
+                    {t.recurrence && t.recurrence !== 'none' && <i className="fas fa-repeat" style={{ fontSize: '0.6rem', marginRight: 3, opacity: 0.6 }} />}
+                    <span className="week-task-title">{t.title}</span>
+                  </div>
+                ))}
+                <button
+                  className="week-add-btn"
+                  onClick={e => { e.stopPropagation(); onAddClick(ds); }}
+                >
+                  <i className="fas fa-plus" />
+                </button>
+              </div>
             </div>
-            <div style={{ padding: 8, minHeight: 200 }}>
-              {dayTasks.map(t => (
-                <div key={t.id} style={{
-                  fontSize: '0.75rem', padding: '3px 6px', borderRadius: 4, marginBottom: 3,
-                  background: t.color || 'var(--indigo-500)', color: '#fff',
-                  textDecoration: t.completed ? 'line-through' : 'none',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>{t.title}</div>
-              ))}
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -473,9 +558,11 @@ function WeekView({ weekStart, tasks, todayStr, onDayClick }) {
 /* ── 연도 뷰 ── */
 function YearView({ year, tasks, todayStr, onMonthClick }) {
   const taskDates = new Set(tasks.map(t => t.date));
+  const nowMonth  = new Date().getMonth();
+  const nowYear   = new Date().getFullYear();
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, padding: 20 }}>
+    <div className="year-grid">
       {Array.from({ length: 12 }, (_, m) => {
         const firstDay    = new Date(year, m, 1).getDay();
         const daysInMonth = new Date(year, m + 1, 0).getDate();
@@ -486,25 +573,25 @@ function YearView({ year, tasks, todayStr, onMonthClick }) {
           cells.push({ d, ds });
         }
         return (
-          <div
-            key={m}
-            style={{ background: 'var(--bg)', borderRadius: 'var(--radius)', padding: 12, cursor: 'pointer' }}
-            onClick={() => onMonthClick(m)}
-          >
-            <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text)', marginBottom: 8 }}>{MONTHS[m]}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 1 }}>
-              {DAYS.map(d => (
-                <div key={d} style={{ fontSize: '0.6rem', color: 'var(--text-sub)', textAlign: 'center' }}>{d}</div>
-              ))}
+          <div key={m} className="year-month-card" onClick={() => onMonthClick(m)}>
+            <div className={`year-month-hdr${m === nowMonth && year === nowYear ? ' current' : ''}`}>
+              {MONTHS[m]}
+            </div>
+            <div className="year-mini-grid">
+              {DAYS.map(d => <div key={d} className="ymg-hdr">{d}</div>)}
               {cells.map((cell, i) => cell ? (
-                <div key={i} style={{
-                  textAlign: 'center', fontSize: '0.65rem', padding: '1px', borderRadius: 3,
-                  background: cell.ds === todayStr
-                    ? 'var(--indigo-600)'
-                    : taskDates.has(cell.ds) ? 'var(--indigo-100)' : 'transparent',
-                  color: cell.ds === todayStr ? '#fff' : 'var(--text)',
-                  fontWeight: cell.ds === todayStr ? 700 : 400,
-                }}>{cell.d}</div>
+                <div
+                  key={i}
+                  className={[
+                    'ymg-cell',
+                    cell.ds === todayStr   ? 'today'        : '',
+                    taskDates.has(cell.ds) ? 'has-tasks'    : '',
+                    KO_HOLIDAYS[cell.ds]   ? 'holiday-cell' : '',
+                  ].filter(Boolean).join(' ')}
+                >
+                  {cell.d}
+                  {taskDates.has(cell.ds) && cell.ds !== todayStr && <span className="ymg-dot" />}
+                </div>
               ) : <div key={i} />)}
             </div>
           </div>

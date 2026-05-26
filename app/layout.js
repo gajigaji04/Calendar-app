@@ -15,6 +15,14 @@ export default function RootLayout({ children }) {
   return (
     <html lang="ko" className="h-full">
       <head>
+        {/* FOUC 방지: React 하이드레이션 전에 테마를 적용 */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          try {
+            var t = localStorage.getItem('tc-theme');
+            if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', t);
+          } catch(e) {}
+        ` }} />
         <link
           rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"

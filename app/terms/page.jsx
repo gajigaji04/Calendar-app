@@ -49,7 +49,7 @@ export default function TermsPage() {
     }}>
       {/* 헤더 */}
       <div style={{ borderBottom:'1px solid rgba(255,255,255,0.06)', padding:'20px 0', background:'rgba(7,7,17,0.9)', backdropFilter:'blur(16px)', position:'sticky', top:0, zIndex:10 }}>
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 flex items-center justify-between">
+        <div style={{ maxWidth:'768px', margin:'0 auto', padding:'0 32px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <Link href="/" style={{ display:'flex', alignItems:'center', gap:'8px', textDecoration:'none' }}>
             <span style={{ fontSize:'20px' }}>📅</span>
             <span style={{ fontWeight:800, fontSize:'15px', color:TEXT }}>Team<span style={{ color:'#818cf8' }}>Calendar</span></span>
@@ -61,7 +61,7 @@ export default function TermsPage() {
       </div>
 
       {/* 본문 */}
-      <div className="max-w-3xl mx-auto px-5 sm:px-8" style={{ paddingTop:'60px', paddingBottom:'96px' }}>
+      <div style={{ maxWidth:'768px', margin:'0 auto', padding:'60px 32px 96px' }}>
         <div style={{ marginBottom:'48px' }}>
           <div style={{ display:'inline-flex', alignItems:'center', gap:'6px', background:'rgba(99,102,241,0.12)', border:'1px solid rgba(99,102,241,0.25)', borderRadius:'999px', padding:'4px 12px', marginBottom:'16px', fontSize:'11px', fontWeight:700, color:'#a5b4fc', letterSpacing:'0.05em' }}>
             법적 고지

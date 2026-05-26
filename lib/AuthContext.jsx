@@ -18,7 +18,7 @@ export function AuthProvider({ children }) {
     });
     const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
-      if (event === 'SIGNED_IN')  router.push('/calendar');
+      if (event === 'SIGNED_IN')  router.push('/dashboard');
       if (event === 'SIGNED_OUT') router.push('/');
     });
     return () => subscription.unsubscribe();

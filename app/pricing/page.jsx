@@ -147,7 +147,7 @@ export default function PricingPage() {
 
       {/* ── NAV ── */}
       <nav style={{ position:'fixed', top:0, left:0, right:0, zIndex:100, height:'64px', display:'flex', alignItems:'center', background:'rgba(7,7,17,0.8)', backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 w-full flex items-center justify-between">
+        <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'0 48px', width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <Link href="/" style={{ display:'flex', alignItems:'center', gap:'10px', textDecoration:'none' }}>
             <Logo size={32} gradId="pNavLg" />
             <span style={{ fontWeight:800, fontSize:'17px', letterSpacing:'-0.025em', color:TEXT }}>
@@ -167,7 +167,7 @@ export default function PricingPage() {
 
       {/* ── CONTENT ── */}
       <div style={{ position:'relative', zIndex:1, paddingTop:'112px', paddingBottom:'96px' }}>
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 lg:px-14">
+        <div style={{ maxWidth:'1100px', margin:'0 auto', padding:'0 48px' }}>
 
           {/* ── 헤딩 ── */}
           <div style={{ textAlign:'center', marginBottom:'56px' }}>
@@ -208,7 +208,7 @@ export default function PricingPage() {
           </div>
 
           {/* ── 플랜 카드 ── */}
-          <div className="grid sm:grid-cols-3 gap-6" style={{ marginBottom:'80px' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'24px', marginBottom:'80px' }}>
             {PLANS.map(plan => {
               const price = yearly ? plan.yearly : plan.monthly;
 
@@ -279,7 +279,7 @@ export default function PricingPage() {
           </div>
 
           {/* ── FAQ ── */}
-          <div className="max-w-2xl mx-auto">
+          <div style={{ maxWidth:'672px', margin:'0 auto' }}>
             <h2 style={{ fontSize:'clamp(1.4rem,2.5vw,1.9rem)', fontWeight:900, letterSpacing:'-0.03em', textAlign:'center', marginBottom:'32px' }}>
               자주 묻는 질문
             </h2>
@@ -307,7 +307,7 @@ export default function PricingPage() {
 
       {/* ── FOOTER ── */}
       <footer style={{ borderTop:'1px solid rgba(255,255,255,0.06)', paddingTop:'28px', paddingBottom:'28px', position:'relative', zIndex:1 }}>
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'0 48px', display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'space-between', gap:'16px' }}>
           <Link href="/" style={{ display:'flex', alignItems:'center', gap:'8px', textDecoration:'none' }}>
             <Logo size={22} gradId="pFootLg" />
             <span style={{ fontWeight:800, fontSize:'14px', color:TEXT }}>Team<span style={{ color:'#818cf8' }}>Calendar</span></span>
