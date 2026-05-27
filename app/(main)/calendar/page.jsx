@@ -1,9 +1,9 @@
 'use client';
 import { Suspense } from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
-import { getTasksByDateRange, getTasksByDate, toggleComplete } from '@/models/taskModel';
+import { getTasksByDateRange, getTasksByDate, toggleComplete, updateTask } from '@/models/taskModel';
 import TaskModal from '@/components/task/TaskModal';
 import { downloadICS } from '@/lib/exportICS';
 import { useDeadlineAlerts } from '@/lib/useDeadlineAlerts';
@@ -106,13 +106,22 @@ function CalendarPage() {
   }
 
   async function handleToggle(id, cur) {
-    await toggleComplete(id, cur);
-    loadTasks();
-    refreshAlerts();
-    if (dayPanel) {
-      const data = await getTasksByDate(user.id, dayPanel);
-      setDayTasks(data);
+    const flip = t => t.id === id ? { ...t, completed: !cur } : t;
+    setTasks(prev => prev.map(flip));
+    setDayTasks(prev => prev.map(flip));
+    try {
+      await toggleComplete(id, cur);
+      refreshAlerts();
+    } catch {
+      const revert = t => t.id === id ? { ...t, completed: cur } : t;
+      setTasks(prev => prev.map(revert));
+      setDayTasks(prev => prev.map(revert));
     }
+  }
+
+  async function handleTaskMove(taskId, newDate) {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, date: newDate } : t));
+    await updateTask(taskId, { date: newDate });
   }
 
   function navigate(dir) {
@@ -137,6 +146,30 @@ function CalendarPage() {
     const d = new Date(now); d.setHours(0,0,0,0); d.setDate(d.getDate() - d.getDay());
     setWeekStart(d);
   }
+
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const goTodayRef = useRef(goToday);
+  goTodayRef.current = goToday;
+  const modalRef = useRef(modal);
+  modalRef.current = modal;
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+      if (modalRef.current) return;
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); navigateRef.current(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); navigateRef.current(1); }
+      if (e.key === 't' || e.key === 'T') goTodayRef.current();
+      if ((e.key === 'n' || e.key === 'N') && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setModal({ _date: todayStr });
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayStr]);
 
   let label = '';
   if (mode === 'year') {
@@ -202,6 +235,7 @@ function CalendarPage() {
               year={year} month={month} tasks={tasks}
               todayStr={todayStr} onDayClick={openDayPanel}
               onAddClick={ds => setModal({ _date: ds })}
+              onTaskMove={handleTaskMove}
             />
           )}
           {mode === 'week' && (
@@ -304,7 +338,8 @@ function CalendarPage() {
 }
 
 /* ── 월 뷰 ── */
-function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick }) {
+function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick, onTaskMove }) {
+  const [dragOverDate, setDragOverDate] = useState(null);
   const firstDay    = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const prevDays    = new Date(year, month, 0).getDate();
@@ -406,6 +441,18 @@ function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick }) {
                       isHolidayDay ? 'holiday-cell'  : '',
                     ].filter(Boolean).join(' ')}
                     onClick={() => cell.ds && onDayClick(cell.ds)}
+                    onDragOver={e => { if (cell.ds) { e.preventDefault(); setDragOverDate(cell.ds); } }}
+                    onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverDate(null); }}
+                    onDrop={e => {
+                      e.preventDefault();
+                      setDragOverDate(null);
+                      if (!cell.ds) return;
+                      try {
+                        const { id, date } = JSON.parse(e.dataTransfer.getData('text/plain'));
+                        if (date !== cell.ds) onTaskMove(id, cell.ds);
+                      } catch { /* ignore */ }
+                    }}
+                    style={dragOverDate === cell.ds ? { outline: '2px dashed var(--primary)', outlineOffset: '-2px' } : undefined}
                   >
                     <div
                       className="cell-head-row"
@@ -434,6 +481,12 @@ function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick }) {
                             key={t.id}
                             className={`cell-task ${t.priority || 'low'}${t.completed ? ' done' : ''}`}
                             style={t.color ? { borderLeft: `3px solid ${t.color}` } : undefined}
+                            draggable
+                            onDragStart={e => {
+                              e.stopPropagation();
+                              e.dataTransfer.effectAllowed = 'move';
+                              e.dataTransfer.setData('text/plain', JSON.stringify({ id: t.id, date: t.date }));
+                            }}
                           >
                               {t.recurrence && t.recurrence !== 'none' && <i className="fas fa-repeat" style={{ fontSize: '0.6rem', marginRight: 3, opacity: 0.6 }} />}
                             {t.title}{dl && <> <span className={`cell-dl ${dl.cls}`}>{dl.label}</span></>}

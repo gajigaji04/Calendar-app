@@ -6,6 +6,14 @@ import { createTask, updateTask, deleteTask, deleteRecurringSeries } from '@/mod
 const COLORS = ['', '#ef4444','#f97316','#f59e0b','#22c55e','#06b6d4','#6366f1','#a855f7','#ec4899','#64748b','#000000'];
 const COLOR_LABELS = ['없음','빨강','주황','노랑','초록','하늘','보라','핑크','분홍','슬레이트','검정'];
 const RECURRENCE_LABELS = { daily: '매일', weekly: '매주', monthly: '매월', yearly: '매년' };
+const CATEGORIES = [
+  { value: '업무', icon: 'fa-briefcase' },
+  { value: '개인', icon: 'fa-user' },
+  { value: '스터디', icon: 'fa-book' },
+  { value: '건강', icon: 'fa-heart' },
+  { value: '취미', icon: 'fa-star' },
+  { value: '기타', icon: 'fa-ellipsis' },
+];
 
 export default function TaskModal({ task, defaultDate, onClose, onSave }) {
   const { user } = useAuth();
@@ -21,6 +29,7 @@ export default function TaskModal({ task, defaultDate, onClose, onSave }) {
   const [completed,    setCompleted]    = useState(task?.completed || false);
   const [recurrence,   setRecurrence]   = useState('none');
   const [recurrenceEnd, setRecurrenceEnd] = useState('');
+  const [category,     setCategory]     = useState(task?.category || '');
   const [saving,       setSaving]       = useState(false);
 
   async function handleSubmit(e) {
@@ -37,6 +46,7 @@ export default function TaskModal({ task, defaultDate, onClose, onSave }) {
       color: color || null,
       completed,
       user_id: user.id,
+      ...(category ? { category } : (task?.category ? { category: null } : {})),
     };
     if (!isEdit) {
       data.recurrence = recurrence;
@@ -49,6 +59,8 @@ export default function TaskModal({ task, defaultDate, onClose, onSave }) {
     } catch (err) {
       if (err.message?.includes("recurrence")) {
         alert('반복 일정 기능을 사용하려면 먼저 Supabase에서 컬럼 추가 SQL을 실행해주세요.\n\nALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence TEXT NOT NULL DEFAULT \'none\', ADD COLUMN IF NOT EXISTS recurrence_end DATE, ADD COLUMN IF NOT EXISTS recurrence_id UUID;\n\n그 후 NOTIFY pgrst, \'reload schema\'; 도 실행하세요.');
+      } else if (err.message?.includes("category")) {
+        alert('카테고리 기능을 사용하려면 Supabase에서 다음 SQL을 실행해주세요:\n\nALTER TABLE tasks ADD COLUMN IF NOT EXISTS category TEXT;\n\n그 후 NOTIFY pgrst, \'reload schema\'; 도 실행하세요.');
       } else {
         alert(`오류: ${err.message}`);
       }
@@ -157,6 +169,33 @@ export default function TaskModal({ task, defaultDate, onClose, onSave }) {
               <option value="medium">보통</option>
               <option value="high">높음</option>
             </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-sub)', display: 'block', marginBottom: 8 }}>
+              카테고리
+            </label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {CATEGORIES.map(cat => (
+                <button
+                  key={cat.value}
+                  type="button"
+                  onClick={() => setCategory(category === cat.value ? '' : cat.value)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    padding: '5px 10px', borderRadius: 20, cursor: 'pointer',
+                    fontSize: '0.78rem', fontWeight: 600, fontFamily: 'inherit',
+                    border: `1.5px solid ${category === cat.value ? 'var(--indigo-600)' : 'var(--border)'}`,
+                    background: category === cat.value ? 'var(--primary-lt)' : 'var(--surface)',
+                    color: category === cat.value ? 'var(--indigo-600)' : 'var(--text-sub)',
+                    transition: 'all .12s',
+                  }}
+                >
+                  <i className={`fas ${cat.icon}`} style={{ fontSize: '0.72rem' }} />
+                  {cat.value}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>

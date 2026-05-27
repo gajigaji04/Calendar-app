@@ -1,9 +1,10 @@
 'use client';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { getTasksByUser, getTasksByDateRange, toggleComplete } from '@/models/taskModel';
 import { useDeadlineAlerts } from '@/lib/useDeadlineAlerts';
 import TaskModal from '@/components/task/TaskModal';
+import SmartRescheduleModal from '@/components/schedule/SmartRescheduleModal';
 import { downloadICS } from '@/lib/exportICS';
 
 const FILTERS = [
@@ -143,12 +144,13 @@ export default function TasksPage() {
   const { refresh: refreshAlerts } = useDeadlineAlerts();
   const today = toDateStr(new Date());
 
-  const [allTasks,   setAllTasks]   = useState([]);
-  const [filter,     setFilter]     = useState('all');
-  const [search,     setSearch]     = useState('');
-  const [sort,       setSort]       = useState('date');
-  const [modal,      setModal]      = useState(null);
-  const [exportOpen, setExportOpen] = useState(false);
+  const [allTasks,      setAllTasks]      = useState([]);
+  const [filter,        setFilter]        = useState('all');
+  const [search,        setSearch]        = useState('');
+  const [sort,          setSort]          = useState('date');
+  const [modal,         setModal]         = useState(null);
+  const [exportOpen,    setExportOpen]    = useState(false);
+  const [smartOpen,     setSmartOpen]     = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -197,10 +199,30 @@ export default function TasksPage() {
     return list;
   }, [allTasks, filter, search, sort, today]);
 
+  const modalRef = useRef(null);
+  useEffect(() => { modalRef.current = modal; }, [modal]);
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+      if (modalRef.current) return;
+      if ((e.key === 'n' || e.key === 'N') && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setModal('add');
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   async function handleToggle(id, cur) {
-    await toggleComplete(id, cur);
-    load();
-    refreshAlerts();
+    setAllTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !cur } : t));
+    try {
+      await toggleComplete(id, cur);
+      refreshAlerts();
+    } catch {
+      setAllTasks(prev => prev.map(t => t.id === id ? { ...t, completed: cur } : t));
+    }
   }
 
   return (
@@ -213,6 +235,14 @@ export default function TasksPage() {
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn-secondary" onClick={() => setExportOpen(true)}>
             <i className="fas fa-file-export" /> 내보내기
+          </button>
+          <button
+            className="btn-secondary"
+            onClick={() => setSmartOpen(true)}
+            title="과부하 날짜 감지 후 일정 재배치 제안"
+            style={{ color: 'var(--indigo-400,#818cf8)' }}
+          >
+            <i className="fas fa-wand-magic-sparkles" /> 스마트 재배치
           </button>
           <button className="btn-primary" onClick={() => setModal('add')}>
             <i className="fas fa-plus" /> 할일 추가
@@ -376,6 +406,15 @@ export default function TasksPage() {
 
       {exportOpen && (
         <ExportModal userId={user.id} onClose={() => setExportOpen(false)} />
+      )}
+
+      {smartOpen && (
+        <SmartRescheduleModal
+          tasks={allTasks}
+          today={today}
+          onClose={() => setSmartOpen(false)}
+          onApplied={load}
+        />
       )}
     </div>
   );

@@ -33,6 +33,8 @@ export default function DashboardPage() {
   const [addTitle,    setAddTitle]    = useState('');
   const [adding,      setAdding]      = useState(false);
   const [nowMs,       setNowMs]       = useState(() => Date.now());
+  const [weekTasks,   setWeekTasks]   = useState([]);
+  const [streakDays,  setStreakDays]  = useState(0);
 
   const { overdue, dueToday, soon, refresh: refreshAlerts } = useDeadlineAlerts();
   const soonClose = soon.filter(t => {
@@ -51,6 +53,34 @@ export default function DashboardPage() {
   }, [user, todayStr]);
 
   useEffect(() => { loadToday(); }, [loadToday]);
+
+  useEffect(() => {
+    if (!user) return;
+    // 이번 주 월~일
+    const ws = new Date(now);
+    ws.setHours(0, 0, 0, 0);
+    const day = ws.getDay();
+    ws.setDate(ws.getDate() - (day === 0 ? 6 : day - 1));
+    const we = new Date(ws); we.setDate(ws.getDate() + 6);
+    // 스트릭용 35일치
+    const ss = new Date(ws); ss.setDate(ws.getDate() - 28);
+
+    Promise.all([
+      getTasksByDateRange(user.id, toDateStr(ws), toDateStr(we)),
+      getTasksByDateRange(user.id, toDateStr(ss), todayStr),
+    ]).then(([wTasks, rangeTasks]) => {
+      setWeekTasks(wTasks);
+      const completedDates = new Set(rangeTasks.filter(t => t.completed).map(t => t.date));
+      let streak = 0;
+      const d = new Date(now); d.setHours(0, 0, 0, 0);
+      for (let i = 0; i < 35; i++) {
+        if (completedDates.has(toDateStr(d))) { streak++; d.setDate(d.getDate() - 1); }
+        else break;
+      }
+      setStreakDays(streak);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 60_000);
@@ -136,6 +166,9 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+
+        {/* ── 생산성 모니터링 ── */}
+        <ProductivityMonitor weekTasks={weekTasks} streakDays={streakDays} todayStr={todayStr} />
 
         {/* ── 메인 그리드 ── */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 16, alignItems: 'start' }}>
@@ -279,6 +312,111 @@ export default function DashboardPage() {
 
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── ProductivityMonitor ── */
+function ProductivityMonitor({ weekTasks, streakDays, todayStr }) {
+  const now = new Date();
+  const ws  = new Date(now);
+  ws.setHours(0, 0, 0, 0);
+  const day = ws.getDay();
+  ws.setDate(ws.getDate() - (day === 0 ? 6 : day - 1));
+
+  const LABELS = ['월', '화', '수', '목', '금', '토', '일'];
+  const weekDays = LABELS.map((label, i) => {
+    const d  = new Date(ws); d.setDate(ws.getDate() + i);
+    const ds = toDateStr(d);
+    const dayTasks = weekTasks.filter(t => t.date === ds);
+    return { ds, label, total: dayTasks.length, done: dayTasks.filter(t => t.completed).length, isToday: ds === todayStr, isFuture: ds > todayStr };
+  });
+
+  const weekTotal = weekDays.reduce((s, d) => s + d.total, 0);
+  const weekDone  = weekDays.reduce((s, d) => s + d.done,  0);
+  const weekPct   = weekTotal > 0 ? Math.round(weekDone / weekTotal * 100) : 0;
+  const maxPerDay = Math.max(...weekDays.map(d => d.total), 1);
+  const BAR_H     = 52;
+
+  return (
+    <div className="card" style={{ padding: '14px 18px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)' }}>
+          <i className="fas fa-chart-line" style={{ marginRight: 8, color: 'var(--primary)' }} />
+          이번 주 생산성
+        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {streakDays > 0 && (
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#ea580c', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <i className="fas fa-fire" />
+              {streakDays}일 연속 🔥
+            </span>
+          )}
+          <span style={{ fontSize: '0.82rem', color: 'var(--text-sub)' }}>
+            주간&nbsp;
+            <span style={{ fontWeight: 700, color: weekPct >= 70 ? 'var(--green-500)' : weekPct >= 40 ? 'var(--amber-500)' : 'var(--text)' }}>
+              {weekPct}%
+            </span>
+            &nbsp;완료
+          </span>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{weekDone}/{weekTotal}</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+        {weekDays.map(d => {
+          const ratio   = d.total > 0 ? d.done / d.total : 0;
+          const totalH  = d.total > 0 ? Math.max((d.total / maxPerDay) * BAR_H, 10) : 6;
+          const doneH   = totalH * ratio;
+
+          return (
+            <div key={d.ds} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+              {/* 바 */}
+              <div style={{ width: '100%', height: BAR_H, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                <div style={{
+                  width: '75%', height: totalH, borderRadius: 5, position: 'relative', overflow: 'hidden',
+                  background: d.isFuture ? 'var(--border-lt)' : 'var(--border)',
+                  outline: d.isToday ? '2px solid var(--primary)' : 'none',
+                  outlineOffset: 2, transition: 'height 0.4s ease',
+                }}>
+                  {!d.isFuture && doneH > 0 && (
+                    <div style={{
+                      position: 'absolute', bottom: 0, left: 0, right: 0,
+                      height: doneH, borderRadius: 5,
+                      background: ratio >= 1 ? 'var(--green-500)' : 'var(--primary)',
+                      transition: 'height 0.5s ease',
+                    }} />
+                  )}
+                </div>
+              </div>
+              {/* 수치 */}
+              <div style={{ fontSize: '0.62rem', color: 'var(--text-sub)', fontWeight: 600, lineHeight: 1 }}>
+                {d.total > 0 ? `${d.done}/${d.total}` : '·'}
+              </div>
+              {/* 요일 */}
+              <div style={{
+                fontSize: '0.72rem', fontWeight: d.isToday ? 800 : 600,
+                color: d.isToday ? 'var(--primary)' : d.isFuture ? 'var(--text-muted)' : 'var(--text-sub)',
+              }}>
+                {d.label}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 범례 */}
+      <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--primary)', display: 'inline-block' }} />완료
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--green-500)', display: 'inline-block' }} />전부 완료
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--border)', display: 'inline-block' }} />미완료/없음
+        </span>
       </div>
     </div>
   );

@@ -206,12 +206,19 @@ body {
 .view-header {
   display: flex; align-items: center;
   justify-content: space-between; flex-wrap: wrap; gap: 10px;
-  padding: 16px 20px 0;
+  padding: 20px 20px 16px;   /* top 20, bottom 16 → 카드와 간격 확보 */
 }
 .view-header h2 {
   font-size: 1.1rem; font-weight: 700; color: var(--text);
 }
 .view-sub { font-size: 0.8rem; color: var(--text-sub); margin-top: 2px; }
+
+/* ─────────────────────────────────────
+   Page Wrapper (도구·연동 등 자유 페이지)
+───────────────────────────────────── */
+.page-wrapper {
+  padding: 20px 20px 32px;
+}
 
 /* ─────────────────────────────────────
    Modal
@@ -543,9 +550,50 @@ body {
 .hdr-drop-item.danger { color: var(--red); }
 .hdr-drop-item.danger:hover { background: var(--red-lt); }
 
-/* hamburger: only visible on mobile */
+/* hamburger: always visible — controls sidebar on all screen sizes */
 .hdr-hamburger { display: flex; }
-@media (min-width: 768px) { .hdr-hamburger { display: none; } }
+
+/* ── 하단 탭바 (모바일 전용) ── */
+.bottom-tab-bar {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .bottom-tab-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 56px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 50;
+    justify-content: space-around;
+    align-items: stretch;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 -1px 8px rgba(0,0,0,.06);
+  }
+
+  .bottom-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    flex: 1;
+    padding: 6px 4px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.65rem;
+    font-weight: 600;
+    transition: color .12s;
+  }
+  .bottom-tab i { font-size: 1.05rem; }
+  .bottom-tab.active { color: var(--primary); }
+  .bottom-tab.active i { color: var(--primary); }
+
+  /* 메인 콘텐츠가 탭바에 가려지지 않도록 여백 */
+  main { padding-bottom: 56px; }
+}
 
 /* ─────────────────────────────────────
    Utilities

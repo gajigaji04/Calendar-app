@@ -1,8 +1,31 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/AuthContext';
+import { useTheme } from '@/lib/ThemeContext';
 import { getSupabase } from '@/lib/supabase';
 import { requestNotificationPermission } from '@/lib/useNotifications';
+
+function StrengthBar({ password }) {
+  const score = [/.{8,}/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/]
+    .filter(r => r.test(password)).length;
+  const colors = ['var(--red-500)', '#f97316', '#eab308', 'var(--green-500)'];
+  const labels = ['너무 짧음', '약함', '보통', '강함'];
+  if (!password) return null;
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 3 }}>
+        {[0,1,2,3].map(i => (
+          <div key={i} style={{ flex: 1, height: 3, borderRadius: 2,
+            background: i < score ? colors[score - 1] : 'var(--border)',
+            transition: 'background .2s' }} />
+        ))}
+      </div>
+      <span style={{ fontSize: '11px', color: colors[score - 1] || 'var(--text-sub)' }}>
+        {labels[score - 1] || '비밀번호를 입력하세요'}
+      </span>
+    </div>
+  );
+}
 import { getTasksByUser } from '@/models/taskModel';
 import { downloadICS } from '@/lib/exportICS';
 
@@ -31,17 +54,20 @@ function Row({ label, sub, children }) {
 }
 
 export default function SettingsPage() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, updatePassword, resetPassword } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const [notifPerm,   setNotifPerm]   = useState('default');
   const [name,        setName]        = useState('');
   const [savingName,  setSavingName]  = useState(false);
   const [nameMsg,     setNameMsg]     = useState('');
   const [exporting,   setExporting]   = useState(false);
-  const [pwOld,       setPwOld]       = useState('');
   const [pwNew,       setPwNew]       = useState('');
+  const [pwConfirm,   setPwConfirm]   = useState('');
   const [savingPw,    setSavingPw]    = useState(false);
   const [pwMsg,       setPwMsg]       = useState('');
+  const [pwError,     setPwError]     = useState(false);
+  const [resetSent,   setResetSent]   = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -68,12 +94,26 @@ export default function SettingsPage() {
   async function handleChangePw(e) {
     e.preventDefault();
     if (!pwNew.trim()) return;
-    setSavingPw(true); setPwMsg('');
-    const { error } = await getSupabase().auth.updateUser({ password: pwNew });
-    setPwMsg(error ? `오류: ${error.message}` : '비밀번호가 변경되었습니다.');
+    if (pwNew.length < 8) { setPwError(true); setPwMsg('비밀번호는 8자 이상이어야 합니다.'); return; }
+    if (pwNew !== pwConfirm) { setPwError(true); setPwMsg('비밀번호가 일치하지 않습니다.'); return; }
+    setSavingPw(true); setPwMsg(''); setPwError(false);
+    const err = await updatePassword(pwNew);
+    if (err) {
+      setPwError(true);
+      setPwMsg(`오류: ${err.message}`);
+    } else {
+      setPwError(false);
+      setPwMsg('비밀번호가 변경되었습니다.');
+      setPwNew(''); setPwConfirm('');
+      setTimeout(() => setPwMsg(''), 4000);
+    }
     setSavingPw(false);
-    if (!error) { setPwOld(''); setPwNew(''); }
-    setTimeout(() => setPwMsg(''), 4000);
+  }
+
+  async function handleSendReset() {
+    if (!user?.email) return;
+    const err = await resetPassword(user.email);
+    if (!err) setResetSent(true);
   }
 
   async function handleExportAll() {
@@ -148,19 +188,43 @@ export default function SettingsPage() {
           <form onSubmit={handleChangePw} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label>새 비밀번호</label>
-              <input type="password" value={pwNew} onChange={e => setPwNew(e.target.value)}
-                placeholder="새 비밀번호 (8자 이상)" minLength={8}
+              <input type="password" value={pwNew} onChange={e => { setPwNew(e.target.value); setPwMsg(''); setPwError(false); }}
+                placeholder="새 비밀번호 (8자 이상)"
                 onKeyDown={e => e.key === 'Enter' && e.preventDefault()} />
+              <StrengthBar password={pwNew} />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>비밀번호 확인</label>
+              <input type="password" value={pwConfirm} onChange={e => { setPwConfirm(e.target.value); setPwMsg(''); setPwError(false); }}
+                placeholder="비밀번호 재입력"
+                style={{ borderColor: pwConfirm ? (pwNew === pwConfirm ? 'var(--green-500)' : 'var(--red-500)') : undefined }}
+                onKeyDown={e => e.key === 'Enter' && e.preventDefault()} />
+              {pwConfirm && (
+                <div style={{ marginTop: 4, fontSize: '0.75rem', color: pwNew === pwConfirm ? 'var(--green-500)' : 'var(--red-500)' }}>
+                  {pwNew === pwConfirm ? '✓ 비밀번호가 일치합니다' : '✗ 비밀번호가 일치하지 않습니다'}
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button type="submit" className="btn-secondary" disabled={savingPw || !pwNew}>
+              <button type="submit" className="btn-secondary" disabled={savingPw || !pwNew || !pwConfirm}>
                 {savingPw ? '변경 중...' : '비밀번호 변경'}
               </button>
             </div>
           </form>
+
           {pwMsg && (
-            <div style={{ marginTop: 8, fontSize: '0.8rem', color: pwMsg.startsWith('오류') ? 'var(--red-500)' : 'var(--green-500)' }}>
-              {pwMsg}
+            <div style={{ marginTop: 10, fontSize: '0.8rem', color: pwError ? 'var(--red-500)' : 'var(--green-500)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span>{pwMsg}</span>
+              {pwError && !resetSent && (
+                <button
+                  onClick={handleSendReset}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 700, textDecoration: 'underline', fontFamily: 'inherit' }}>
+                  비밀번호 재설정 이메일 받기 →
+                </button>
+              )}
+              {resetSent && (
+                <span style={{ color: 'var(--green-500)' }}>📧 재설정 이메일을 보냈습니다.</span>
+              )}
             </div>
           )}
         </Section>
@@ -206,6 +270,21 @@ export default function SettingsPage() {
             .ics 파일은 Google 캘린더, Apple 캘린더, Outlook 등에서 가져오기로 사용할 수 있습니다.
             <br />기간별 내보내기는 <b>할일</b> 페이지의 내보내기 버튼을 이용하세요.
           </div>
+        </Section>
+
+        {/* 외관 */}
+        <Section title="외관" icon="fa-palette">
+          <Row label="테마" sub="앱의 색상 모드를 선택하세요">
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[['light', '라이트', 'fa-sun'], ['dark', '다크', 'fa-moon']].map(([val, label, icon]) => (
+                <button key={val}
+                  onClick={() => val !== theme && toggleTheme()}
+                  className={val === theme ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}>
+                  <i className={`fas ${icon}`} style={{ marginRight: 5 }} />{label}
+                </button>
+              ))}
+            </div>
+          </Row>
         </Section>
 
         {/* 계정 관리 */}

@@ -3,7 +3,11 @@ import { getSupabase } from '@/lib/supabase';
 export async function createTeam(name, description, userId, displayName, email) {
   const sb = getSupabase();
   const teamId     = crypto.randomUUID();
-  const inviteCode = Math.random().toString(36).slice(2, 10);
+  // Math.random() 대신 crypto API 사용 (암호학적으로 안전한 난수)
+  const inviteCode = Array.from(
+    crypto.getRandomValues(new Uint8Array(8)),
+    b => (b % 36).toString(36)
+  ).join('');
   const { data: team, error: te } = await sb.from('teams')
     .insert({ id: teamId, name, description: description || null, owner_id: userId, created_by: userId, invite_code: inviteCode })
     .select().single();
@@ -74,7 +78,10 @@ export async function deleteTeam(teamId) {
 }
 
 export async function regenerateInviteCode(teamId) {
-  const code = Math.random().toString(36).slice(2, 10);
+  const code = Array.from(
+    crypto.getRandomValues(new Uint8Array(8)),
+    b => (b % 36).toString(36)
+  ).join('');
   const { error } = await getSupabase().from('teams')
     .update({ invite_code: code }).eq('id', teamId);
   if (error) throw new Error(error.message);

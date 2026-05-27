@@ -6,11 +6,14 @@ const NAV = [
   { href: '/dashboard', icon: 'fa-house',          label: '대시보드' },
   { href: '/calendar',  icon: 'fa-calendar-days',  label: '캘린더' },
   { href: '/tasks',     icon: 'fa-list-check',     label: '할일' },
-  { href: '/teams',     icon: 'fa-users',          label: '팀' },
+  { href: '/stats',     icon: 'fa-chart-line',     label: '통계' },
+  { href: '/tools',        icon: 'fa-wand-magic-sparkles', label: '도구' },
+  { href: '/integrations', icon: 'fa-plug',             label: '연동' },
+  { href: '/teams',        icon: 'fa-users',             label: '팀' },
   { href: '/settings',  icon: 'fa-gear',           label: '설정' },
 ];
 
-export default function Sidebar({ open, collapsed, onToggleCollapse, onClose }) {
+export default function Sidebar({ open, collapsed, onClose }) {
   const pathname = usePathname();
 
   return (
@@ -35,18 +38,6 @@ export default function Sidebar({ open, collapsed, onToggleCollapse, onClose }) 
         })}
       </nav>
 
-      {/* 접기/펼치기 토글 */}
-      <div style={{ padding: '8px 8px 12px', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-        <button
-          onClick={onToggleCollapse}
-          title={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
-          className={`sidebar-toggle${collapsed ? ' centered' : ''}`}
-        >
-          <i className={`fas fa-chevron-${collapsed ? 'right' : 'left'}`}
-            style={{ fontSize: '0.75rem', flexShrink: 0 }} />
-          {!collapsed && <span>접기</span>}
-        </button>
-      </div>
     </aside>
   );
 }

@@ -39,8 +39,34 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(() => getSupabase().auth.signOut(), []);
 
+  /** 회원가입 후 이메일 OTP 인증 */
+  const verifyOtp = useCallback(async (email, token) => {
+    const { error } = await getSupabase().auth.verifyOtp({ email, token, type: 'email' });
+    return error;
+  }, []);
+
+  /** OTP 재전송 */
+  const resendOtp = useCallback(async (email) => {
+    const { error } = await getSupabase().auth.resend({ type: 'signup', email });
+    return error;
+  }, []);
+
+  /** 비밀번호 재설정 이메일 발송 */
+  const resetPassword = useCallback(async (email) => {
+    const { error } = await getSupabase().auth.resetPasswordForEmail(email, {
+      redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback?next=/reset-password`,
+    });
+    return error;
+  }, []);
+
+  /** 새 비밀번호로 변경 (세션 있을 때) */
+  const updatePassword = useCallback(async (newPassword) => {
+    const { error } = await getSupabase().auth.updateUser({ password: newPassword });
+    return error;
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, verifyOtp, resendOtp, resetPassword, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );

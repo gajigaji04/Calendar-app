@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/AuthContext';
 import { getSupabase } from '@/lib/supabase';
@@ -26,7 +26,7 @@ function Logo({ size = 36, gradId = 'loginLg' }) {
   );
 }
 
-/* ── Social icon SVGs ── */
+/* ── 소셜 아이콘 ── */
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24">
@@ -52,74 +52,131 @@ function GitHubIcon() {
   );
 }
 
-/* ── Social button configs ── */
 const SOCIAL = [
-  {
-    id: 'google',
-    label: 'Google로 계속하기',
-    Icon: GoogleIcon,
-    bg: 'rgba(255,255,255,0.07)',
-    border: 'rgba(255,255,255,0.13)',
-    color: '#f0f0ff',
-    hoverBg: 'rgba(255,255,255,0.12)',
-  },
-  {
-    id: 'kakao',
-    label: '카카오로 계속하기',
-    Icon: KakaoIcon,
-    bg: '#FEE500',
-    border: '#FEE500',
-    color: '#191600',
-    hoverBg: '#F5DC00',
-  },
-  {
-    id: 'github',
-    label: 'GitHub로 계속하기',
-    Icon: GitHubIcon,
-    bg: 'rgba(255,255,255,0.07)',
-    border: 'rgba(255,255,255,0.13)',
-    color: '#f0f0ff',
-    hoverBg: 'rgba(255,255,255,0.12)',
-  },
+  { id: 'google', label: 'Google로 계속하기', Icon: GoogleIcon, bg: 'rgba(255,255,255,0.07)', border: 'rgba(255,255,255,0.13)', color: '#f0f0ff', hoverBg: 'rgba(255,255,255,0.12)' },
+  { id: 'kakao',  label: '카카오로 계속하기', Icon: KakaoIcon,  bg: '#FEE500', border: '#FEE500', color: '#191600', hoverBg: '#F5DC00' },
+  { id: 'github', label: 'GitHub로 계속하기', Icon: GitHubIcon, bg: 'rgba(255,255,255,0.07)', border: 'rgba(255,255,255,0.13)', color: '#f0f0ff', hoverBg: 'rgba(255,255,255,0.12)' },
 ];
 
-/* ─────────────────────────────────
-   Input 공통 스타일 (인라인)
-───────────────────────────────── */
-const inputStyle = {
-  width: '100%',
-  padding: '11px 14px',
-  background: 'rgba(255,255,255,0.06)',
-  border: '1px solid rgba(255,255,255,0.1)',
-  borderRadius: '12px',
-  color: '#f0f0ff',
-  fontSize: '14px',
-  outline: 'none',
-  transition: 'border-color .2s, background .2s, box-shadow .2s',
+const inputBase = {
+  width: '100%', padding: '11px 14px', boxSizing: 'border-box',
+  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: '12px', color: '#f0f0ff', fontSize: '14px',
+  outline: 'none', transition: 'border-color .2s, background .2s, box-shadow .2s',
 };
 
-export default function LoginPage() {
-  const { signIn, signUp } = useAuth();
+/* ── 비밀번호 강도 바 ── */
+function StrengthBar({ password }) {
+  if (!password) return null;
+  const score = [/.{8,}/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter(r => r.test(password)).length;
+  const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e'];
+  const labels = ['너무 짧음', '약함', '보통', '강함'];
+  return (
+    <div style={{ marginTop: 5 }}>
+      <div style={{ display: 'flex', gap: 3 }}>
+        {[0,1,2,3].map(i => (
+          <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i < score ? colors[score-1] : 'rgba(255,255,255,0.1)', transition: 'background .2s' }} />
+        ))}
+      </div>
+      <span style={{ fontSize: '11px', color: colors[score-1] || 'rgba(255,255,255,0.3)', marginTop: 3, display: 'block' }}>{labels[score-1] || ''}</span>
+    </div>
+  );
+}
 
+/* ── OTP 입력 컴포넌트 ── */
+function OtpInput({ value, onChange }) {
+  const inputs = useRef([]);
+  const digits = value.padEnd(6, '').split('').slice(0, 6);
+
+  function handleChange(i, v) {
+    const clean = v.replace(/\D/, '');
+    if (!clean && !v) return;
+    const arr = [...digits];
+    arr[i] = clean.slice(-1);
+    onChange(arr.join(''));
+    if (clean && i < 5) inputs.current[i + 1]?.focus();
+  }
+
+  function handleKeyDown(i, e) {
+    if (e.key === 'Backspace' && !digits[i] && i > 0) {
+      inputs.current[i - 1]?.focus();
+      const arr = [...digits]; arr[i - 1] = '';
+      onChange(arr.join(''));
+    }
+  }
+
+  function handlePaste(e) {
+    const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (text) { onChange(text.padEnd(6, '').slice(0, 6)); inputs.current[Math.min(text.length, 5)]?.focus(); }
+    e.preventDefault();
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+      {[0,1,2,3,4,5].map(i => (
+        <input
+          key={i}
+          ref={el => inputs.current[i] = el}
+          type="text" inputMode="numeric" maxLength={1}
+          value={digits[i] || ''}
+          onChange={e => handleChange(i, e.target.value)}
+          onKeyDown={e => handleKeyDown(i, e)}
+          onPaste={handlePaste}
+          style={{
+            width: 44, height: 52, textAlign: 'center', fontSize: '20px', fontWeight: 700,
+            background: digits[i] ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.06)',
+            border: `1px solid ${digits[i] ? 'rgba(99,102,241,0.6)' : 'rgba(255,255,255,0.15)'}`,
+            borderRadius: 10, color: '#f0f0ff', outline: 'none',
+            transition: 'all .15s', fontFamily: 'monospace',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════
+   메인 페이지
+═══════════════════════════════════════ */
+export default function LoginPage() {
+  const { signIn, signUp, verifyOtp, resendOtp, resetPassword } = useAuth();
+
+  // mode: 'login' | 'register' | 'verify' | 'forgot'
   const [mode,          setMode]          = useState('login');
   const [name,          setName]          = useState('');
   const [email,         setEmail]         = useState('');
   const [password,      setPassword]      = useState('');
+  const [pwConfirm,     setPwConfirm]     = useState('');
+  const [otp,           setOtp]           = useState('');
+  const [pendingEmail,  setPendingEmail]  = useState('');
   const [agreeTerms,    setAgreeTerms]    = useState(false);
   const [agreePrivacy,  setAgreePrivacy]  = useState(false);
   const [loading,       setLoading]       = useState(false);
   const [socialLoading, setSocialLoading] = useState('');
   const [error,         setError]         = useState('');
   const [success,       setSuccess]       = useState('');
-  const [hoveredSocial, setHoveredSocial] = useState('');
   const [focusedField,  setFocusedField]  = useState('');
+  const [hoveredSocial, setHoveredSocial] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // 재전송 쿨다운 타이머
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setTimeout(() => setResendCooldown(c => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendCooldown]);
 
   function reset() { setError(''); setSuccess(''); }
-  function toggleMode() {
-    setMode(m => m === 'login' ? 'register' : 'login');
-    setAgreeTerms(false);
-    setAgreePrivacy(false);
-    reset();
+
+  function goMode(m) { reset(); setOtp(''); setMode(m); }
+
+  function fieldStyle(id) {
+    return {
+      ...inputBase,
+      border: `1px solid ${focusedField === id ? 'rgba(99,102,241,0.7)' : 'rgba(255,255,255,0.1)'}`,
+      background: focusedField === id ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.06)',
+      boxShadow: focusedField === id ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none',
+    };
   }
 
   async function handleSocial(provider) {
@@ -132,277 +189,347 @@ export default function LoginPage() {
     if (err) { setError(err.message); setSocialLoading(''); }
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    reset();
-    setLoading(true);
-
-    if (mode === 'login') {
-      const err = await signIn(email, password);
-      if (err) setError(
-        err.message === 'Invalid login credentials'
-          ? '이메일 또는 비밀번호가 올바르지 않습니다.'
-          : err.message
-      );
-    } else {
-      if (!name.trim())         { setError('이름을 입력해주세요.'); setLoading(false); return; }
-      if (password.length < 8)  { setError('비밀번호는 8자 이상이어야 합니다.'); setLoading(false); return; }
-      if (!agreeTerms)          { setError('이용약관에 동의해주세요.'); setLoading(false); return; }
-      if (!agreePrivacy)        { setError('개인정보처리방침에 동의해주세요.'); setLoading(false); return; }
-      const err = await signUp(email, password, name);
-      if (err) setError(err.message);
-      else setSuccess('가입 확인 이메일을 보냈습니다. 메일함을 확인해주세요! 📬');
+  /* ── 로그인 ── */
+  async function handleLogin(e) {
+    e.preventDefault(); reset(); setLoading(true);
+    const err = await signIn(email, password);
+    if (err) {
+      const msg = err.message || '';
+      if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
+        setError('__INVALID_CREDENTIALS__');
+      } else if (msg.includes('Email not confirmed')) {
+        setPendingEmail(email);
+        setError('이메일 인증이 완료되지 않았습니다. 인증 코드를 확인해주세요.');
+        setTimeout(() => goMode('verify'), 1500);
+      } else {
+        setError(msg);
+      }
     }
     setLoading(false);
   }
 
-  const fieldStyle = (id) => ({
-    ...inputStyle,
-    border: `1px solid ${focusedField === id ? 'rgba(99,102,241,0.7)' : 'rgba(255,255,255,0.1)'}`,
-    background: focusedField === id ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.06)',
-    boxShadow: focusedField === id ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none',
-  });
+  /* ── 회원가입 ── */
+  async function handleRegister(e) {
+    e.preventDefault(); reset();
+    if (!name.trim())          { setError('이름을 입력해주세요.'); return; }
+    if (password.length < 8)   { setError('비밀번호는 8자 이상이어야 합니다.'); return; }
+    if (password !== pwConfirm) { setError('비밀번호가 일치하지 않습니다.'); return; }
+    if (!agreeTerms)           { setError('이용약관에 동의해주세요.'); return; }
+    if (!agreePrivacy)         { setError('개인정보처리방침에 동의해주세요.'); return; }
+    setLoading(true);
+    const err = await signUp(email, password, name);
+    if (err) {
+      if (err.message?.includes('already registered') || err.message?.includes('already been registered')) {
+        setError('이미 가입된 이메일입니다. 로그인을 시도해보세요.');
+      } else {
+        setError(err.message);
+      }
+    } else {
+      setPendingEmail(email);
+      setMode('verify');
+      setResendCooldown(60);
+    }
+    setLoading(false);
+  }
+
+  /* ── OTP 인증 ── */
+  async function handleVerify(e) {
+    e.preventDefault(); reset();
+    if (otp.length !== 6) { setError('6자리 인증 코드를 모두 입력해주세요.'); return; }
+    setLoading(true);
+    const err = await verifyOtp(pendingEmail, otp);
+    if (err) {
+      setError('인증 코드가 올바르지 않거나 만료되었습니다. 다시 확인해주세요.');
+    } else {
+      setSuccess('인증 완료! 대시보드로 이동합니다 🎉');
+    }
+    setLoading(false);
+  }
+
+  /* ── OTP 재전송 ── */
+  async function handleResend() {
+    if (resendCooldown > 0) return;
+    setLoading(true); reset();
+    const err = await resendOtp(pendingEmail);
+    if (err) setError(err.message);
+    else { setSuccess('인증 코드를 재전송했습니다. 메일함을 확인하세요.'); setResendCooldown(60); }
+    setLoading(false);
+  }
+
+  /* ── 비밀번호 찾기 ── */
+  async function handleForgot(e) {
+    e.preventDefault(); reset();
+    if (!email.trim()) { setError('이메일을 입력해주세요.'); return; }
+    setLoading(true);
+    const err = await resetPassword(email);
+    if (err) setError(err.message);
+    else setSuccess('비밀번호 재설정 이메일을 보냈습니다. 메일함을 확인해주세요 📬');
+    setLoading(false);
+  }
+
+  /* ── 공통 렌더링 헬퍼 ── */
+  function Feedback() {
+    if (error === '__INVALID_CREDENTIALS__') {
+      return (
+        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 10, padding: '12px 14px', fontSize: '13px', color: '#fca5a5' }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>⚠ 잘못된 이메일 또는 비밀번호입니다.</div>
+          <div style={{ color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>
+            아직 계정이 없으신가요?{' '}
+            <button
+              type="button"
+              onClick={() => { goMode('register'); setEmail(email); }}
+              style={{ color: '#818cf8', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', padding: 0, fontFamily: 'inherit' }}
+            >
+              회원가입 후 진행해주세요 →
+            </button>
+          </div>
+        </div>
+      );
+    }
+    if (error) return (
+      <div style={{ display: 'flex', gap: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 10, padding: '10px 14px', fontSize: '13px', color: '#fca5a5' }}>
+        <span>⚠</span><span>{error}</span>
+      </div>
+    );
+    if (success) return (
+      <div style={{ display: 'flex', gap: 8, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 10, padding: '10px 14px', fontSize: '13px', color: '#6ee7b7' }}>
+        <span>✓</span><span>{success}</span>
+      </div>
+    );
+    return null;
+  }
+
+  function SubmitBtn({ label, loadingLabel }) {
+    return (
+      <button
+        type="submit"
+        disabled={loading || !!socialLoading}
+        style={{
+          width: '100%', padding: '13px',
+          background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+          border: 'none', borderRadius: '12px', color: '#fff',
+          fontSize: '15px', fontWeight: 800,
+          cursor: loading || socialLoading ? 'not-allowed' : 'pointer',
+          opacity: loading || socialLoading ? 0.65 : 1,
+          transition: 'opacity .15s', fontFamily: 'inherit',
+          boxShadow: '0 4px 20px rgba(99,102,241,0.4)',
+        }}
+      >
+        {loading ? loadingLabel : label}
+      </button>
+    );
+  }
+
+  const MODE_CONFIG = {
+    login:    { emoji: '👋', title: '다시 오셨군요',   sub: null },
+    register: { emoji: '✨', title: '계정 만들기',     sub: null },
+    verify:   { emoji: '📨', title: '이메일 인증',      sub: `${pendingEmail || '이메일'}로 발송된 6자리 코드를 입력하세요` },
+    forgot:   { emoji: '🔐', title: '비밀번호 찾기',   sub: '가입 시 사용한 이메일을 입력하면 재설정 링크를 보내드려요' },
+  };
+  const { emoji, title, sub } = MODE_CONFIG[mode];
 
   return (
     <div style={{
-      minHeight: '100vh',
-      background: '#070711',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '24px 16px',
+      minHeight: '100vh', background: '#070711',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '24px 16px', position: 'relative', overflow: 'hidden',
       fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Noto Sans KR',sans-serif",
-      position: 'relative',
-      overflow: 'hidden',
     }}>
-
-      {/* ── 배경 글로우 ── */}
-      <div style={{ position:'fixed', inset:0, pointerEvents:'none', zIndex:0 }}>
-        <div style={{ position:'absolute', top:'-10%', left:'50%', transform:'translateX(-50%)', width:'700px', height:'500px', background:'radial-gradient(ellipse, rgba(99,102,241,0.14) 0%, transparent 65%)' }} />
-        <div style={{ position:'absolute', bottom:'-10%', left:'30%', width:'400px', height:'400px', background:'radial-gradient(ellipse, rgba(139,92,246,0.08) 0%, transparent 65%)' }} />
-        {/* 그리드 오버레이 */}
-        <div style={{ position:'absolute', inset:0, backgroundImage:'linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px)', backgroundSize:'60px 60px', maskImage:'radial-gradient(ellipse 70% 70% at 50% 50%, black, transparent)' }} />
+      {/* 배경 */}
+      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
+        <div style={{ position: 'absolute', top: '-10%', left: '50%', transform: 'translateX(-50%)', width: '700px', height: '500px', background: 'radial-gradient(ellipse, rgba(99,102,241,0.14) 0%, transparent 65%)' }} />
+        <div style={{ position: 'absolute', bottom: '-10%', left: '30%', width: '400px', height: '400px', background: 'radial-gradient(ellipse, rgba(139,92,246,0.08) 0%, transparent 65%)' }} />
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px)', backgroundSize: '60px 60px', maskImage: 'radial-gradient(ellipse 70% 70% at 50% 50%, black, transparent)' }} />
       </div>
 
-      {/* ── 카드 ── */}
-      <div className="animate-fade-up" style={{
-        position: 'relative', zIndex: 1,
-        width: '100%', maxWidth: '420px',
-        background: 'rgba(255,255,255,0.04)',
-        border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: '24px',
-        padding: '40px 36px',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
+      {/* 카드 */}
+      <div style={{
+        position: 'relative', zIndex: 1, width: '100%', maxWidth: '420px',
+        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: '24px', padding: '40px 36px',
+        backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
         boxShadow: '0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.08)',
       }}>
 
         {/* 로고 */}
-        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:'28px', gap:'10px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 28, gap: 10 }}>
           <Logo size={44} gradId="lgCard" />
-          <div style={{ fontWeight:800, fontSize:'20px', letterSpacing:'-0.025em', color:'#f0f0ff' }}>
-            Team<span style={{ color:'#818cf8' }}>Calendar</span>
+          <div style={{ fontWeight: 800, fontSize: '20px', letterSpacing: '-0.025em', color: '#f0f0ff' }}>
+            Team<span style={{ color: '#818cf8' }}>Calendar</span>
           </div>
         </div>
 
         {/* 헤딩 */}
-        <div style={{ marginBottom:'24px' }}>
-          <h1 style={{ fontSize:'22px', fontWeight:800, color:'#f0f0ff', marginBottom:'6px', letterSpacing:'-0.02em' }}>
-            {mode === 'login' ? '다시 오셨군요 👋' : '계정 만들기'}
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#f0f0ff', marginBottom: 6, letterSpacing: '-0.02em' }}>
+            {emoji} {title}
           </h1>
-          <p style={{ fontSize:'13.5px', color:'rgba(255,255,255,0.42)' }}>
-            {mode === 'login' ? '계정이 없으신가요? ' : '이미 계정이 있으신가요? '}
-            <button onClick={toggleMode} style={{ background:'none', border:'none', color:'#818cf8', fontWeight:700, fontSize:'13.5px', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
-              {mode === 'login' ? '회원가입' : '로그인'}
-            </button>
-          </p>
-        </div>
-
-        {/* ── 소셜 버튼 ── */}
-        <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'24px' }}>
-          {SOCIAL.map(({ id, label, Icon, bg, border, color, hoverBg }) => (
-            <button
-              key={id}
-              onClick={() => handleSocial(id)}
-              disabled={!!socialLoading}
-              onMouseEnter={() => setHoveredSocial(id)}
-              onMouseLeave={() => setHoveredSocial('')}
-              style={{
-                width: '100%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                padding: '11px 16px',
-                background: hoveredSocial === id ? hoverBg : bg,
-                border: `1px solid ${border}`,
-                borderRadius: '12px',
-                color,
-                fontSize: '14px', fontWeight: 600,
-                cursor: socialLoading ? 'not-allowed' : 'pointer',
-                opacity: socialLoading && socialLoading !== id ? 0.55 : 1,
-                transition: 'background .15s, opacity .15s',
-                fontFamily: 'inherit',
-              }}
-            >
-              {socialLoading === id
-                ? <span style={{ width:'16px', height:'16px', border:`2px solid ${color}`, borderTopColor:'transparent', borderRadius:'50%', display:'inline-block', animation:'spin-slow .7s linear infinite' }} />
-                : <Icon />
+          {sub && <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.42)', lineHeight: 1.5 }}>{sub}</p>}
+          {!sub && (
+            <p style={{ fontSize: '13.5px', color: 'rgba(255,255,255,0.42)' }}>
+              {mode === 'login'
+                ? <><span>계정이 없으신가요? </span><button onClick={() => goMode('register')} style={{ background: 'none', border: 'none', color: '#818cf8', fontWeight: 700, fontSize: '13.5px', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>회원가입</button></>
+                : <><span>이미 계정이 있으신가요? </span><button onClick={() => goMode('login')} style={{ background: 'none', border: 'none', color: '#818cf8', fontWeight: 700, fontSize: '13.5px', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>로그인</button></>
               }
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* ── 구분선 ── */}
-        <div style={{ display:'flex', alignItems:'center', gap:'12px', marginBottom:'24px' }}>
-          <div style={{ flex:1, height:'1px', background:'rgba(255,255,255,0.08)' }} />
-          <span style={{ fontSize:'12px', color:'rgba(255,255,255,0.3)', fontWeight:600, letterSpacing:'0.04em' }}>또는 이메일로 계속</span>
-          <div style={{ flex:1, height:'1px', background:'rgba(255,255,255,0.08)' }} />
-        </div>
-
-        {/* ── 이메일 폼 ── */}
-        <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
-
-          {mode === 'register' && (
-            <div>
-              <label style={{ display:'block', fontSize:'12px', fontWeight:700, color:'rgba(255,255,255,0.45)', marginBottom:'7px', letterSpacing:'0.06em', textTransform:'uppercase' }}>
-                이름
-              </label>
-              <input
-                type="text" value={name} onChange={e => setName(e.target.value)}
-                placeholder="홍길동" autoComplete="name"
-                style={fieldStyle('name')}
-                onFocus={() => setFocusedField('name')}
-                onBlur={() => setFocusedField('')}
-              />
-            </div>
+            </p>
           )}
+        </div>
 
-          <div>
-            <label style={{ display:'block', fontSize:'12px', fontWeight:700, color:'rgba(255,255,255,0.45)', marginBottom:'7px', letterSpacing:'0.06em', textTransform:'uppercase' }}>
-              이메일
-            </label>
-            <input
-              type="email" value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="hello@example.com" autoComplete="email"
-              style={fieldStyle('email')}
-              onFocus={() => setFocusedField('email')}
-              onBlur={() => setFocusedField('')}
-              required
-            />
-          </div>
-
-          <div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'7px' }}>
-              <label style={{ fontSize:'12px', fontWeight:700, color:'rgba(255,255,255,0.45)', letterSpacing:'0.06em', textTransform:'uppercase' }}>
-                비밀번호
-              </label>
-              {mode === 'login' && (
-                <button type="button" style={{ background:'none', border:'none', color:'#818cf8', fontSize:'12px', fontWeight:600, cursor:'pointer', fontFamily:'inherit', padding:0 }}>
-                  비밀번호 찾기
+        {/* ═══ LOGIN ═══ */}
+        {mode === 'login' && (
+          <>
+            {/* 소셜 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+              {SOCIAL.map(({ id, label, Icon, bg, border, color, hoverBg }) => (
+                <button key={id} onClick={() => handleSocial(id)} disabled={!!socialLoading}
+                  onMouseEnter={() => setHoveredSocial(id)} onMouseLeave={() => setHoveredSocial('')}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '11px 16px', background: hoveredSocial === id ? hoverBg : bg, border: `1px solid ${border}`, borderRadius: 12, color, fontSize: 14, fontWeight: 600, cursor: socialLoading ? 'not-allowed' : 'pointer', opacity: socialLoading && socialLoading !== id ? 0.55 : 1, transition: 'background .15s', fontFamily: 'inherit' }}>
+                  {socialLoading === id
+                    ? <span style={{ width: 16, height: 16, border: `2px solid ${color}`, borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin-slow .7s linear infinite' }} />
+                    : <Icon />}
+                  {label}
                 </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', fontWeight: 600, letterSpacing: '0.04em' }}>또는 이메일로 계속</span>
+              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
+            </div>
+
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.45)', marginBottom: 7, letterSpacing: '0.06em', textTransform: 'uppercase' }}>이메일</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="hello@example.com" autoComplete="email" style={fieldStyle('email')} onFocus={() => setFocusedField('email')} onBlur={() => setFocusedField('')} required />
+              </div>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>비밀번호</label>
+                  <button type="button" onClick={() => goMode('forgot')} style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>
+                    비밀번호 찾기
+                  </button>
+                </div>
+                <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="비밀번호 입력" autoComplete="current-password" style={fieldStyle('pw')} onFocus={() => setFocusedField('pw')} onBlur={() => setFocusedField('')} required />
+              </div>
+              <Feedback />
+              <SubmitBtn label="로그인" loadingLabel="로그인 중..." />
+            </form>
+          </>
+        )}
+
+        {/* ═══ REGISTER ═══ */}
+        {mode === 'register' && (
+          <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.45)', marginBottom: 7, letterSpacing: '0.06em', textTransform: 'uppercase' }}>이름</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="홍길동" autoComplete="name" style={fieldStyle('name')} onFocus={() => setFocusedField('name')} onBlur={() => setFocusedField('')} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.45)', marginBottom: 7, letterSpacing: '0.06em', textTransform: 'uppercase' }}>이메일</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="hello@example.com" autoComplete="email" style={fieldStyle('email')} onFocus={() => setFocusedField('email')} onBlur={() => setFocusedField('')} required />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.45)', marginBottom: 7, letterSpacing: '0.06em', textTransform: 'uppercase' }}>비밀번호</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="8자 이상" autoComplete="new-password" style={fieldStyle('pw')} onFocus={() => setFocusedField('pw')} onBlur={() => setFocusedField('')} required />
+              <StrengthBar password={password} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.45)', marginBottom: 7, letterSpacing: '0.06em', textTransform: 'uppercase' }}>비밀번호 확인</label>
+              <input
+                type="password" value={pwConfirm} onChange={e => setPwConfirm(e.target.value)}
+                placeholder="비밀번호 재입력" autoComplete="new-password"
+                style={{
+                  ...fieldStyle('confirm'),
+                  ...(pwConfirm && password !== pwConfirm ? { border: '1px solid rgba(239,68,68,0.6)' } : {}),
+                  ...(pwConfirm && password === pwConfirm ? { border: '1px solid rgba(34,197,94,0.6)' } : {}),
+                }}
+                onFocus={() => setFocusedField('confirm')} onBlur={() => setFocusedField('')}
+              />
+              {pwConfirm && (
+                <p style={{ fontSize: 11, marginTop: 4, color: password === pwConfirm ? '#6ee7b7' : '#fca5a5' }}>
+                  {password === pwConfirm ? '✓ 비밀번호가 일치합니다' : '✗ 비밀번호가 일치하지 않습니다'}
+                </p>
               )}
             </div>
-            <input
-              type="password" value={password} onChange={e => setPassword(e.target.value)}
-              placeholder={mode === 'login' ? '비밀번호 입력' : '8자 이상 입력'}
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              style={fieldStyle('pw')}
-              onFocus={() => setFocusedField('pw')}
-              onBlur={() => setFocusedField('')}
-              required
-            />
+
+            {/* 약관 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 16, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12 }}>
+              {[
+                { state: agreeTerms, set: setAgreeTerms, label: '이용약관', href: '/terms' },
+                { state: agreePrivacy, set: setAgreePrivacy, label: '개인정보처리방침', href: '/privacy' },
+              ].map(({ state, set, label, href }) => (
+                <label key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                  <div onClick={() => set(v => !v)} style={{ width: 18, height: 18, flexShrink: 0, borderRadius: 5, cursor: 'pointer', background: state ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'rgba(255,255,255,0.06)', border: state ? 'none' : '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .15s' }}>
+                    {state && <span style={{ color: '#fff', fontSize: 11, fontWeight: 900 }}>✓</span>}
+                  </div>
+                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.4 }}>
+                    <Link href={href} target="_blank" style={{ color: '#818cf8', fontWeight: 700, textDecoration: 'none' }}>{label}</Link>에 동의합니다{' '}
+                    <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11 }}>(필수)</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            <Feedback />
+            <SubmitBtn label="가입하기" loadingLabel="처리 중..." />
+          </form>
+        )}
+
+        {/* ═══ VERIFY ═══ */}
+        {mode === 'verify' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ textAlign: 'center', padding: '8px 0' }}>
+              <OtpInput value={otp} onChange={setOtp} />
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: 12 }}>
+                이메일이 없다면 스팸함을 확인하거나 링크를 직접 클릭하세요
+              </p>
+            </div>
+
+            <Feedback />
+
+            <form onSubmit={handleVerify} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <SubmitBtn label="인증 완료" loadingLabel="확인 중..." />
+            </form>
+
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 16, fontSize: 13 }}>
+              <button
+                onClick={handleResend}
+                disabled={resendCooldown > 0 || loading}
+                style={{ background: 'none', border: 'none', color: resendCooldown > 0 ? 'rgba(255,255,255,0.3)' : '#818cf8', fontWeight: 600, cursor: resendCooldown > 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 13, padding: 0 }}
+              >
+                {resendCooldown > 0 ? `재전송 (${resendCooldown}s)` : '코드 재전송'}
+              </button>
+              <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
+              <button onClick={() => goMode('login')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, padding: 0 }}>
+                로그인으로 돌아가기
+              </button>
+            </div>
           </div>
+        )}
 
-          {/* ── 약관 동의 (회원가입만) ── */}
-          {mode === 'register' && (
-            <div style={{ display:'flex', flexDirection:'column', gap:'10px', padding:'16px', background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:'12px' }}>
-              <label style={{ display:'flex', alignItems:'center', gap:'10px', cursor:'pointer' }}>
-                <div
-                  onClick={() => setAgreeTerms(v => !v)}
-                  style={{
-                    width:'18px', height:'18px', flexShrink:0, borderRadius:'5px', cursor:'pointer',
-                    background: agreeTerms ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'rgba(255,255,255,0.06)',
-                    border: agreeTerms ? 'none' : '1px solid rgba(255,255,255,0.2)',
-                    display:'flex', alignItems:'center', justifyContent:'center',
-                    transition:'all .15s',
-                  }}>
-                  {agreeTerms && <span style={{ color:'#fff', fontSize:'11px', fontWeight:900, lineHeight:1 }}>✓</span>}
-                </div>
-                <span style={{ fontSize:'13px', color:'rgba(255,255,255,0.55)', lineHeight:1.4 }}>
-                  <Link href="/terms" target="_blank" style={{ color:'#818cf8', fontWeight:700, textDecoration:'none' }}>이용약관</Link>
-                  {' '}에 동의합니다 <span style={{ color:'rgba(255,255,255,0.3)', fontSize:'11px' }}>(필수)</span>
-                </span>
-              </label>
-              <label style={{ display:'flex', alignItems:'center', gap:'10px', cursor:'pointer' }}>
-                <div
-                  onClick={() => setAgreePrivacy(v => !v)}
-                  style={{
-                    width:'18px', height:'18px', flexShrink:0, borderRadius:'5px', cursor:'pointer',
-                    background: agreePrivacy ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'rgba(255,255,255,0.06)',
-                    border: agreePrivacy ? 'none' : '1px solid rgba(255,255,255,0.2)',
-                    display:'flex', alignItems:'center', justifyContent:'center',
-                    transition:'all .15s',
-                  }}>
-                  {agreePrivacy && <span style={{ color:'#fff', fontSize:'11px', fontWeight:900, lineHeight:1 }}>✓</span>}
-                </div>
-                <span style={{ fontSize:'13px', color:'rgba(255,255,255,0.55)', lineHeight:1.4 }}>
-                  <Link href="/privacy" target="_blank" style={{ color:'#818cf8', fontWeight:700, textDecoration:'none' }}>개인정보처리방침</Link>
-                  {' '}에 동의합니다 <span style={{ color:'rgba(255,255,255,0.3)', fontSize:'11px' }}>(필수)</span>
-                </span>
-              </label>
+        {/* ═══ FORGOT ═══ */}
+        {mode === 'forgot' && (
+          <form onSubmit={handleForgot} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.45)', marginBottom: 7, letterSpacing: '0.06em', textTransform: 'uppercase' }}>가입 이메일</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="hello@example.com" autoComplete="email" style={fieldStyle('email')} onFocus={() => setFocusedField('email')} onBlur={() => setFocusedField('')} required />
             </div>
-          )}
-
-          {/* 에러 / 성공 */}
-          {error && (
-            <div style={{ display:'flex', alignItems:'center', gap:'8px', background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.25)', borderRadius:'10px', padding:'10px 14px', fontSize:'13px', color:'#fca5a5' }}>
-              <span>⚠</span><span>{error}</span>
-            </div>
-          )}
-          {success && (
-            <div style={{ display:'flex', alignItems:'center', gap:'8px', background:'rgba(16,185,129,0.1)', border:'1px solid rgba(16,185,129,0.25)', borderRadius:'10px', padding:'10px 14px', fontSize:'13px', color:'#6ee7b7' }}>
-              <span>✓</span><span>{success}</span>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading || !!socialLoading}
-            style={{
-              width: '100%',
-              padding: '13px',
-              background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-              border: 'none',
-              borderRadius: '12px',
-              color: '#fff',
-              fontSize: '15px', fontWeight: 800,
-              cursor: loading || socialLoading ? 'not-allowed' : 'pointer',
-              opacity: loading || socialLoading ? 0.65 : 1,
-              transition: 'opacity .15s, transform .1s',
-              boxShadow: '0 4px 20px rgba(99,102,241,0.4)',
-              fontFamily: 'inherit',
-              letterSpacing: '0.01em',
-            }}
-          >
-            {loading ? '처리 중...' : mode === 'login' ? '로그인' : '가입하기'}
-          </button>
-        </form>
+            <Feedback />
+            <SubmitBtn label="재설정 메일 보내기" loadingLabel="전송 중..." />
+            <button type="button" onClick={() => goMode('login')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, textAlign: 'center', padding: 4 }}>
+              ← 로그인으로 돌아가기
+            </button>
+          </form>
+        )}
 
         {/* 하단 링크 */}
-        <div style={{ marginTop:'24px', textAlign:'center' }}>
-          <Link href="/" style={{ fontSize:'12.5px', color:'rgba(255,255,255,0.3)', textDecoration:'none', transition:'color .2s' }}>
-            ← 홈으로 돌아가기
-          </Link>
-        </div>
-
-        <div style={{ marginTop:'20px', paddingTop:'20px', borderTop:'1px solid rgba(255,255,255,0.07)', textAlign:'center' }}>
-          <p style={{ fontSize:'11.5px', color:'rgba(255,255,255,0.25)', lineHeight:1.6 }}>
-            가입하면{' '}
-            <a href="#" style={{ color:'rgba(255,255,255,0.4)', textDecoration:'underline' }}>이용약관</a>
-            {' '}및{' '}
-            <a href="#" style={{ color:'rgba(255,255,255,0.4)', textDecoration:'underline' }}>개인정보처리방침</a>
-            에 동의한 것으로 간주합니다.
-          </p>
-        </div>
+        {(mode === 'login' || mode === 'register') && (
+          <div style={{ marginTop: 24, textAlign: 'center' }}>
+            <Link href="/" style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.3)', textDecoration: 'none' }}>
+              ← 홈으로 돌아가기
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );
