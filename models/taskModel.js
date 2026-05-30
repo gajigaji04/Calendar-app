@@ -54,8 +54,15 @@ export async function createTask(task) {
   const { recurrence, recurrence_end, recurrence_id, ...base } = task;
   const hasRecurrence = recurrence && recurrence !== 'none';
 
+  // NOT NULL 컬럼에 null 이 들어가지 않도록 기본값 보장
+  const withDefaults = {
+    description: '',
+    category:    '',
+    ...base,
+  };
+
   if (!hasRecurrence) {
-    const payload = { id: crypto.randomUUID(), ...base };
+    const payload = { id: crypto.randomUUID(), ...withDefaults };
     const { data, error } = await getSupabase().from('tasks').insert(payload).select().single();
     if (error) throw new Error(error.message);
     return data;
@@ -65,7 +72,7 @@ export async function createTask(task) {
   const dates = generateDates(task.date, recurrence, recurrence_end);
   const payloads = dates.map(d => ({
     id: crypto.randomUUID(),
-    ...base,
+    ...withDefaults,
     date: d,
     recurrence,
     recurrence_end: recurrence_end || null,

@@ -4,6 +4,17 @@ import { useAuth } from '@/lib/AuthContext';
 import { createTask, updateTask, deleteTask, deleteRecurringSeries } from '@/models/taskModel';
 
 const COLORS = ['', '#ef4444','#f97316','#f59e0b','#22c55e','#06b6d4','#6366f1','#a855f7','#ec4899','#64748b','#000000'];
+
+const TIME_PRESETS = [
+  { label: '오전 8시',  value: '08:00' },
+  { label: '오전 9시',  value: '09:00' },
+  { label: '오전 10시', value: '10:00' },
+  { label: '정오',      value: '12:00' },
+  { label: '오후 2시',  value: '14:00' },
+  { label: '오후 5시',  value: '17:00' },
+  { label: '오후 6시',  value: '18:00' },
+  { label: '오후 9시',  value: '21:00' },
+];
 const COLOR_LABELS = ['없음','빨강','주황','노랑','초록','하늘','보라','핑크','분홍','슬레이트','검정'];
 const RECURRENCE_LABELS = { daily: '매일', weekly: '매주', monthly: '매월', yearly: '매년' };
 const CATEGORIES = [
@@ -112,18 +123,67 @@ export default function TaskModal({ task, defaultDate, onClose, onSave }) {
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+          {/* 날짜 / 마감일 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
               <label>날짜 *</label>
               <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
             </div>
             <div className="form-group">
-              <label>마감 시간</label>
-              <input type="time" value={dueTime} onChange={e => setDueTime(e.target.value)} />
-            </div>
-            <div className="form-group">
               <label>마감일</label>
               <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} />
+            </div>
+          </div>
+
+          {/* 마감 시간 */}
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>마감 시간</span>
+              {dueTime && (
+                <button type="button" onClick={() => setDueTime('')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.72rem', color: 'var(--text-sub)', fontFamily: 'inherit', padding: 0 }}>
+                  초기화
+                </button>
+              )}
+            </label>
+            {/* 프리셋 버튼 */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 }}>
+              {TIME_PRESETS.map(({ label, value }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setDueTime(dueTime === value ? '' : value)}
+                  style={{
+                    padding: '4px 10px', borderRadius: 20, cursor: 'pointer',
+                    fontSize: '0.75rem', fontWeight: 600, fontFamily: 'inherit',
+                    border: `1.5px solid ${dueTime === value ? 'var(--indigo-600,#4f46e5)' : 'var(--border)'}`,
+                    background: dueTime === value ? 'var(--primary-lt)' : 'var(--surface)',
+                    color: dueTime === value ? 'var(--indigo-600,#4f46e5)' : 'var(--text-sub)',
+                    transition: 'all .1s',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {/* 직접 입력 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="time"
+                value={dueTime}
+                onChange={e => setDueTime(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              {dueTime && (
+                <span style={{ fontSize: '0.8rem', color: 'var(--indigo-600,#4f46e5)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  {(() => {
+                    const [h, m] = dueTime.split(':').map(Number);
+                    const ampm = h < 12 ? '오전' : '오후';
+                    const hh   = h === 0 ? 12 : h > 12 ? h - 12 : h;
+                    return `${ampm} ${hh}:${String(m).padStart(2,'0')}`;
+                  })()}
+                </span>
+              )}
             </div>
           </div>
 

@@ -8,7 +8,7 @@ const NAV = [
   { href: '/tasks',     icon: 'fa-list-check',     label: '할일' },
   { href: '/stats',     icon: 'fa-chart-line',     label: '통계' },
   { href: '/tools',        icon: 'fa-wand-magic-sparkles', label: '도구' },
-  { href: '/integrations', icon: 'fa-plug',             label: '연동' },
+  { href: '/integrations', icon: 'fa-plug',              label: '연동' },
   { href: '/teams',        icon: 'fa-users',             label: '팀' },
   { href: '/settings',  icon: 'fa-gear',           label: '설정' },
 ];

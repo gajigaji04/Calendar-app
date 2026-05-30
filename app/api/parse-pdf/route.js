@@ -27,8 +27,9 @@ export async function POST(request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer      = Buffer.from(arrayBuffer);
 
-    // pdf-parse: requires Node runtime
-    const { default: pdfParse } = await import('pdf-parse');
+    // pdf-parse v2: CJS main entry
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require('pdf-parse/dist/pdf-parse/cjs/index.cjs');
     const data = await pdfParse(buffer);
 
     return NextResponse.json({ text: data.text, pages: data.numpages });

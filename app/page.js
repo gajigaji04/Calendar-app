@@ -139,13 +139,13 @@ const PLANS = [
     cta:'무료로 시작', href:'/login',
   },
   {
-    name:'프로', price:6900, sub:'/월', featured:true, badge:'가장 인기',
+    name:'프로', price:2990, sub:'/월', featured:true, badge:'가장 인기',
     feats:['무제한 할일','월·주·일 뷰','1h·30m 전 알림','반복 일정','ICS 내보내기'],
     off:['팀 기능'],
     cta:'프로 시작하기', href:null,
   },
   {
-    name:'팀', price:12900, sub:'/인/월', featured:false,
+    name:'팀', price:8290, sub:'/월', featured:false,
     feats:['프로 기능 전체','팀 캘린더 공유','팀원 최대 20명','RSVP 관리','우선 지원'],
     off:[],
     cta:'팀 플랜 시작', href:null,

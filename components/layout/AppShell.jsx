@@ -4,6 +4,8 @@ import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import BottomTabBar from './BottomTabBar';
+import ChatWidget from '@/components/widgets/ChatWidget';
+import AIAssistant from '@/components/widgets/AIAssistant';
 import { useNotifications } from '@/lib/useNotifications';
 import { DeadlineAlertsProvider } from '@/lib/useDeadlineAlerts';
 
@@ -49,6 +51,8 @@ export default function AppShell({ children }) {
         </main>
       </div>
       <BottomTabBar />
+      <AIAssistant />
+      <ChatWidget />
     </div>
     </DeadlineAlertsProvider>
   );

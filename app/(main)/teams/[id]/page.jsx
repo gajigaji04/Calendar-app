@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import { getTeam, getTeamMembers, removeMember, leaveTeam, regenerateInviteCode } from '@/models/teamModel';
 import { getTasksByUserIds } from '@/models/taskModel';
+import { getTeamTasks, createTeamTask, toggleTeamTask, deleteTeamTask } from '@/models/teamTaskModel';
 
 const DAYS   = ['일','월','화','수','목','금','토'];
 const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
@@ -26,7 +27,7 @@ function MemberAvatar({ member, idx, size = 32, showBadge, badgeColor }) {
         width: size, height: size, borderRadius: '50%',
         background: MEMBER_COLORS[idx % MEMBER_COLORS.length],
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: '#fff', fontWeight: 700, fontSize: size * 0.35 + 'rem',
+        color: '#fff', fontWeight: 700, fontSize: size * 0.42 + 'px',
       }}>
         {(member.display_name || member.email || '?')[0].toUpperCase()}
       </div>
@@ -332,14 +333,20 @@ export default function TeamCalendarPage() {
 
   const [team,          setTeam]          = useState(null);
   const [members,       setMembers]       = useState([]);
-  const [monthTasks,    setMonthTasks]    = useState([]);  // 현재 월 태스크
-  const [reportTasks,   setReportTasks]   = useState([]);  // 넓은 범위 (리포트용)
+  const [monthTasks,    setMonthTasks]    = useState([]);
+  const [reportTasks,   setReportTasks]   = useState([]);
+  const [yearTasks,     setYearTasks]     = useState([]);
   const [year,          setYear]          = useState(now.getFullYear());
   const [month,         setMonth]         = useState(now.getMonth());
+  const [calView,       setCalView]       = useState('month'); // year|month|week
+  const [navYear,       setNavYear]       = useState(now.getFullYear());
+  const [weekStr,       setWeekStr]       = useState(() => {
+    const d = new Date(now); d.setDate(d.getDate() - d.getDay()); return toDateStr(d);
+  });
   const [panel,         setPanel]         = useState(null);
   const [tab,           setTab]           = useState('calendar');
   const [copied,        setCopied]        = useState(false);
-  const [filterMembers, setFilterMembers] = useState(new Set()); // 빈 Set = 전체 표시
+  const [filterMembers, setFilterMembers] = useState(new Set());
 
   const todayStr = toDateStr(now);
 
@@ -376,11 +383,31 @@ export default function TeamCalendarPage() {
     return m?.display_name || m?.email?.split('@')[0] || '멤버';
   }, [members]);
 
+  // 연간 데이터 로드
+  const loadYear = useCallback(async (yr) => {
+    if (!members.length) return;
+    const ids = members.map(m => m.user_id);
+    const ts = await getTasksByUserIds(ids, `${yr}-01-01`, `${yr}-12-31`);
+    setYearTasks(ts);
+  }, [members]);
+
+  useEffect(() => {
+    if (calView === 'year' && members.length) loadYear(navYear);
+  }, [calView, navYear, loadYear]);
+
   function navigate(dir) {
     let m = month + dir, y = year;
     if (m < 0)  { m = 11; y--; }
     if (m > 11) { m = 0;  y++; }
     setMonth(m); setYear(y);
+  }
+
+  function navigateWeekCal(dir) {
+    const d = new Date(weekStr + 'T00:00:00');
+    d.setDate(d.getDate() + dir * 7);
+    setWeekStr(toDateStr(d));
+    // 주가 바뀌면 해당 월 데이터 보장 (loadAll이 year/month를 의존)
+    setYear(d.getFullYear()); setMonth(d.getMonth());
   }
 
   async function handleCopyCode() {
@@ -462,6 +489,19 @@ export default function TeamCalendarPage() {
     ? (filterMembers.size === 0 ? monthTasks : visibleTasks).filter(t => t.date === panel)
     : [];
 
+  /* ── 주간 뷰 사전 계산 ── */
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStr + 'T00:00:00'); d.setDate(d.getDate() + i); return toDateStr(d);
+  });
+  const visWeek  = filterMembers.size === 0 ? monthTasks : monthTasks.filter(t => filterMembers.has(t.user_id));
+  const wTaskMap = {};
+  visWeek.forEach(t => { (wTaskMap[t.date] = wTaskMap[t.date] ?? []).push(t); });
+  const wS = new Date(weekStr + 'T00:00:00');
+  const wE = new Date((weekDays[6] ?? weekStr) + 'T00:00:00');
+  const weekRangeLabel = wS.getMonth() === wE.getMonth()
+    ? `${wS.getFullYear()}년 ${wS.getMonth()+1}월 ${wS.getDate()}일 – ${wE.getDate()}일`
+    : `${wS.getMonth()+1}/${wS.getDate()} – ${wE.getMonth()+1}/${wE.getDate()}`;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)', minHeight: 0 }}>
 
@@ -482,7 +522,7 @@ export default function TeamCalendarPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-            {[['calendar','캘린더'],['report','리포트'],['members','멤버']].map(([key,label]) => (
+            {[['calendar','캘린더'],['planner','플래너'],['report','리포트'],['members','멤버']].map(([key,label]) => (
               <button key={key} onClick={() => setTab(key)} style={{
                 padding: '5px 14px', fontSize: '0.82rem', cursor: 'pointer',
                 border: 'none', fontFamily: 'inherit',
@@ -536,7 +576,121 @@ export default function TeamCalendarPage() {
             )}
           </div>
 
-          <div style={{ display: 'flex', flex: 1, minHeight: 0, padding: '0 20px 20px' }}>
+          {/* ── 뷰 스위처 ── */}
+          <div style={{ padding: '0 20px 8px', display: 'flex', gap: 2 }}>
+            <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+              {[['year','연간','fa-calendar'],['month','월간','fa-table-cells'],['week','주간','fa-calendar-week']].map(([v,label,icon]) => (
+                <button key={v} onClick={() => { setCalView(v); setPanel(null); }} style={{
+                  padding: '5px 12px', fontSize: '0.78rem', cursor: 'pointer',
+                  border: 'none', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5,
+                  background: calView === v ? 'var(--indigo-600,#4f46e5)' : 'var(--surface)',
+                  color: calView === v ? '#fff' : 'var(--text-sub)',
+                }}>
+                  <i className={`fas ${icon}`} style={{ fontSize: '0.7rem' }} />{label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── 연간 뷰 ── */}
+          {calView === 'year' && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <button className="icon-btn" onClick={() => setNavYear(p => p - 1)}><i className="fas fa-chevron-left" /></button>
+                <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)', minWidth: 70, textAlign: 'center' }}>{navYear}년</span>
+                <button className="icon-btn" onClick={() => setNavYear(p => p + 1)}><i className="fas fa-chevron-right" /></button>
+                <button className="btn-secondary btn-sm" onClick={() => setNavYear(now.getFullYear())}>올해</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+                {Array.from({ length: 12 }, (_, mi) => {
+                  const isNow   = navYear === now.getFullYear() && mi === now.getMonth();
+                  const mStr    = `${navYear}-${String(mi+1).padStart(2,'0')}`;
+                  const mDays   = new Date(navYear, mi+1, 0).getDate();
+                  const mFirst  = new Date(navYear, mi, 1).getDay();
+                  const taskSet = new Set((filterMembers.size === 0 ? yearTasks : yearTasks.filter(t => filterMembers.has(t.user_id))).filter(t => t.date.startsWith(mStr)).map(t => t.date));
+                  return (
+                    <div key={mi}
+                      onClick={() => { setYear(navYear); setMonth(mi); setCalView('month'); }}
+                      style={{
+                        padding: '10px', borderRadius: 10, cursor: 'pointer',
+                        background: isNow ? 'rgba(99,102,241,0.07)' : 'var(--card)',
+                        border: `1px solid ${isNow ? 'rgba(99,102,241,0.3)' : 'var(--border)'}`,
+                        transition: 'border-color .12s',
+                      }}
+                    >
+                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: isNow ? 'var(--indigo-600,#4f46e5)' : 'var(--text)', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{mi+1}월</span>
+                        {taskSet.size > 0 && <span style={{ fontSize: '0.65rem', fontWeight: 500, color: 'var(--text-sub)' }}>{taskSet.size}일</span>}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 1 }}>
+                        {['일','월','화','수','목','금','토'].map(w => (
+                          <div key={w} style={{ fontSize: '0.5rem', textAlign: 'center', color: 'var(--text-muted,#9ca3af)', fontWeight: 600 }}>{w}</div>
+                        ))}
+                        {Array.from({ length: mFirst }, (_, i) => <div key={`e${i}`} />)}
+                        {Array.from({ length: mDays }, (_, d) => {
+                          const ds      = `${mStr}-${String(d+1).padStart(2,'0')}`;
+                          const hasTask = taskSet.has(ds);
+                          const isTd    = ds === todayStr;
+                          return (
+                            <div key={d} style={{
+                              aspectRatio: '1', borderRadius: '50%',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '0.55rem', fontWeight: isTd ? 800 : 400,
+                              background: isTd ? '#4f46e5' : hasTask ? 'rgba(99,102,241,0.18)' : 'transparent',
+                              color: isTd ? '#fff' : hasTask ? 'var(--indigo-600,#4f46e5)' : 'var(--text-sub)',
+                            }}>{d+1}</div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── 주간 뷰 ── */}
+          {calView === 'week' && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '0 20px 20px', minHeight: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <button className="icon-btn" onClick={() => navigateWeekCal(-1)}><i className="fas fa-chevron-left" /></button>
+                <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text)', minWidth: 200, textAlign: 'center' }}>{weekRangeLabel}</span>
+                <button className="icon-btn" onClick={() => navigateWeekCal(1)}><i className="fas fa-chevron-right" /></button>
+                <button className="btn-secondary btn-sm" onClick={() => { const d = new Date(now); d.setDate(d.getDate() - d.getDay()); setWeekStr(toDateStr(d)); setYear(now.getFullYear()); setMonth(now.getMonth()); }}>
+                  이번 주
+                </button>
+              </div>
+              <div className="card" style={{ flex: 1, minHeight: 0, padding: 0, overflow: 'auto', display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
+                {weekDays.map((ds, ci) => {
+                  const d      = new Date(ds + 'T00:00:00');
+                  const isTd   = ds === todayStr;
+                  const isPast = ds < todayStr;
+                  const dayT   = wTaskMap[ds] ?? [];
+                  return (
+                    <div key={ds} style={{ borderRight: ci < 6 ? '1px solid var(--border)' : 'none', display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ padding: '8px 4px', textAlign: 'center', borderBottom: '1px solid var(--border)', background: isTd ? 'rgba(99,102,241,0.06)' : 'transparent' }}>
+                        <div style={{ fontSize: '0.68rem', color: ci === 0 ? 'var(--red-500)' : ci === 6 ? '#818cf8' : 'var(--text-sub)', fontWeight: 600 }}>{DAYS[ci]}</div>
+                        <div style={{ fontSize: '1rem', fontWeight: isTd ? 800 : 600, margin: '2px auto', width: 28, height: 28, borderRadius: '50%', lineHeight: '28px', background: isTd ? '#4f46e5' : 'transparent', color: isTd ? '#fff' : isPast ? 'var(--text-muted,#9ca3af)' : 'var(--text)' }}>
+                          {d.getDate()}
+                        </div>
+                        {dayT.length > 0 && <div style={{ fontSize: '0.62rem', color: 'var(--indigo-400,#818cf8)', fontWeight: 700 }}>{dayT.length}</div>}
+                      </div>
+                      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 3px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {dayT.map(t => (
+                          <div key={t.id} style={{ fontSize: '0.68rem', padding: '2px 5px', borderRadius: 4, borderLeft: `3px solid ${memberColor(t.user_id)}`, background: memberColor(t.user_id) + '18', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: t.completed ? 'line-through' : 'none', opacity: t.completed ? 0.5 : 1 }} title={`${memberName(t.user_id)}: ${t.title}`}>
+                            {t.title}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── 월간 뷰 ── */}
+          {calView === 'month' && <div style={{ display: 'flex', flex: 1, minHeight: 0, padding: '0 20px 20px' }}>
             {/* 캘린더 */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -657,8 +811,15 @@ export default function TeamCalendarPage() {
                 ))}
               </div>
             )}
-          </div>
+          </div>}
         </>
+      )}
+
+      {/* ─── 플래너 탭 ─── */}
+      {tab === 'planner' && (
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <PlannerTab teamId={teamId} members={members} user={user} />
+        </div>
       )}
 
       {/* ─── 리포트 탭 ─── */}
@@ -741,6 +902,573 @@ export default function TeamCalendarPage() {
             })}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 팀 플래너 탭 ────────────────────────────────────────
+const PRIORITY_COLOR = { high: 'var(--red-500,#ef4444)', medium: 'var(--amber-500,#f59e0b)', low: 'var(--green-500,#22c55e)' };
+const PRIORITY_KO    = { high: '높음', medium: '보통', low: '낮음' };
+const WD = ['일','월','화','수','목','금','토'];
+
+function dsAdd(ds, n) {
+  const d = new Date(ds + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return d.toISOString().split('T')[0];
+}
+function getWeekStart(ds) {
+  const d = new Date(ds + 'T00:00:00');
+  d.setDate(d.getDate() - d.getDay());
+  return d.toISOString().split('T')[0];
+}
+
+function PlannerTab({ teamId, members, user }) {
+  const now   = new Date();
+  const today = now.toISOString().split('T')[0];
+
+  const [tasks,    setTasks]    = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
+  const [filter,   setFilter]   = useState('all');      // all | mine | done
+  const [viewMode, setViewMode] = useState('list');     // list | month | week
+  const [showForm, setShowForm] = useState(false);
+  const [err,      setErr]      = useState('');
+
+  // 캘린더 탐색
+  const [calYear,   setCalYear]   = useState(now.getFullYear());
+  const [calMonth,  setCalMonth]  = useState(now.getMonth());
+  const [weekStart, setWeekStart] = useState(getWeekStart(today));
+  const [selected,  setSelected]  = useState(null); // 선택된 날짜 (팝업)
+
+  // 추가 폼
+  const [title,      setTitle]      = useState('');
+  const [date,       setDate]       = useState(today);
+  const [priority,   setPriority]   = useState('medium');
+  const [assignedTo, setAssignedTo] = useState('');
+
+  const isOwner = members.find(m => m.user_id === user?.id)?.role === 'owner';
+
+  async function load() {
+    setLoading(true);
+    try { setTasks(await getTeamTasks(teamId)); }
+    catch { /* ignore */ }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { load(); }, [teamId]); // eslint-disable-line
+
+  async function handleAdd(e) {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setSaving(true); setErr('');
+    try {
+      await createTeamTask({
+        team_id:     teamId,
+        title:       title.trim(),
+        date,
+        priority,
+        assigned_to: assignedTo || null,
+        created_by:  user.id,
+      });
+      setTitle(''); setDate(today); setPriority('medium'); setAssignedTo('');
+      setShowForm(false);
+      load();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  }
+
+  async function handleToggle(task) {
+    await toggleTeamTask(task.id, task.completed);
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: !t.completed } : t));
+  }
+
+  async function handleDelete(id) {
+    if (!confirm('이 할 일을 삭제하시겠습니까?')) return;
+    await deleteTeamTask(id);
+    setTasks(prev => prev.filter(t => t.id !== id));
+  }
+
+  const memberMap = Object.fromEntries(members.map((m, i) => [m.user_id, { name: m.display_name || m.email?.split('@')[0], colorIdx: i }]));
+
+  const filtered = tasks.filter(t => {
+    if (filter === 'mine') return t.assigned_to === user?.id || t.created_by === user?.id;
+    if (filter === 'done') return t.completed;
+    return true;
+  });
+
+  // 날짜별 그룹
+  const groups = {};
+  filtered.forEach(t => {
+    (groups[t.date] = groups[t.date] ?? []).push(t);
+  });
+
+  function dateLabel(ds) {
+    const diff = Math.round((new Date(ds + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
+    const d    = new Date(ds + 'T00:00:00');
+    const base = `${d.getMonth()+1}월 ${d.getDate()}일(${['일','월','화','수','목','금','토'][d.getDay()]})`;
+    if (diff === 0) return `오늘 · ${base}`;
+    if (diff === 1) return `내일 · ${base}`;
+    if (diff < 0)  return `${base} (지남)`;
+    return base;
+  }
+
+  // 날짜→태스크 맵 (캘린더 뷰용, 필터 적용)
+  const taskMap = {};
+  filtered.forEach(t => { (taskMap[t.date] = taskMap[t.date] ?? []).push(t); });
+
+  // ── 연간 뷰 ─────────────────────────────────────────────
+  function YearView() {
+    const [pNavYear, setPNavYear] = useState(calYear);
+
+    return (
+      <div>
+        {/* 연도 네비 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <button className="icon-btn" onClick={() => setPNavYear(p => p - 1)}><i className="fas fa-chevron-left" /></button>
+          <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)', minWidth: 70, textAlign: 'center' }}>{pNavYear}년</span>
+          <button className="icon-btn" onClick={() => setPNavYear(p => p + 1)}><i className="fas fa-chevron-right" /></button>
+          <button className="btn-secondary btn-sm" onClick={() => setPNavYear(new Date().getFullYear())}>올해</button>
+        </div>
+
+        {/* 12개 미니 월 */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+          {Array.from({ length: 12 }, (_, mi) => {
+            const isNow  = pNavYear === new Date().getFullYear() && mi === new Date().getMonth();
+            const mStr   = `${pNavYear}-${String(mi+1).padStart(2,'0')}`;
+            const mDays  = new Date(pNavYear, mi+1, 0).getDate();
+            const mFirst = new Date(pNavYear, mi, 1).getDay();
+            const taskDs = new Set(filtered.filter(t => t.date.startsWith(mStr)).map(t => t.date));
+            return (
+              <div key={mi}
+                onClick={() => { setCalYear(pNavYear); setCalMonth(mi); setViewMode('month'); }}
+                style={{
+                  padding: '10px', borderRadius: 10, cursor: 'pointer',
+                  background: isNow ? 'rgba(99,102,241,0.07)' : 'var(--card)',
+                  border: `1px solid ${isNow ? 'rgba(99,102,241,0.3)' : 'var(--border)'}`,
+                  transition: 'border-color .12s',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 700, color: isNow ? 'var(--indigo-600,#4f46e5)' : 'var(--text)' }}>{mi+1}월</span>
+                  {taskDs.size > 0 && <span style={{ fontSize: '0.65rem', color: 'var(--text-sub)' }}>{taskDs.size}일</span>}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 1 }}>
+                  {['일','월','화','수','목','금','토'].map(w => (
+                    <div key={w} style={{ fontSize: '0.5rem', textAlign: 'center', color: 'var(--text-muted,#9ca3af)', fontWeight: 600 }}>{w}</div>
+                  ))}
+                  {Array.from({ length: mFirst }, (_, i) => <div key={`e${i}`} />)}
+                  {Array.from({ length: mDays }, (_, d) => {
+                    const ds     = `${mStr}-${String(d+1).padStart(2,'0')}`;
+                    const hasTsk = taskDs.has(ds);
+                    const isTd   = ds === today;
+                    return (
+                      <div key={d} style={{
+                        aspectRatio: '1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.55rem', fontWeight: isTd ? 800 : 400,
+                        background: isTd ? '#4f46e5' : hasTsk ? 'rgba(99,102,241,0.18)' : 'transparent',
+                        color: isTd ? '#fff' : hasTsk ? 'var(--indigo-600,#4f46e5)' : 'var(--text-sub)',
+                      }}>{d+1}</div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── 월간 뷰 ─────────────────────────────────────────────
+  function navigateMonth(dir) {
+    let m = calMonth + dir, y = calYear;
+    if (m < 0)  { m = 11; y--; }
+    if (m > 11) { m = 0;  y++; }
+    setCalMonth(m); setCalYear(y); setSelected(null);
+  }
+
+  function MonthView() {
+    const first   = new Date(calYear, calMonth, 1).getDay();
+    const days    = new Date(calYear, calMonth + 1, 0).getDate();
+    const prev    = new Date(calYear, calMonth, 0).getDate();
+    const cells   = [];
+    for (let i = 0; i < first; i++)
+      cells.push({ d: prev - first + 1 + i, ds: null, other: true });
+    for (let d = 1; d <= days; d++) {
+      const ds = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      cells.push({ d, ds, other: false });
+    }
+    const rem = (7 - cells.length % 7) % 7;
+    for (let d = 1; d <= rem; d++) cells.push({ d, ds: null, other: true });
+    const weeks = [];
+    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+
+    return (
+      <div>
+        {/* 월 네비 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <button className="icon-btn" onClick={() => navigateMonth(-1)}><i className="fas fa-chevron-left" /></button>
+          <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)', minWidth: 110, textAlign: 'center' }}>
+            {calYear}년 {calMonth + 1}월
+          </span>
+          <button className="icon-btn" onClick={() => navigateMonth(1)}><i className="fas fa-chevron-right" /></button>
+          <button className="btn-secondary btn-sm" onClick={() => { setCalYear(now.getFullYear()); setCalMonth(now.getMonth()); }}>
+            오늘
+          </button>
+        </div>
+        {/* 그리드 */}
+        <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
+            {WD.map(w => (
+              <div key={w} className="cal-hdr-cell">{w}</div>
+            ))}
+          </div>
+          {weeks.map((week, wi) => (
+            <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
+              {week.map((cell, ci) => {
+                const cellTasks = cell.ds ? (taskMap[cell.ds] ?? []) : [];
+                const isToday   = cell.ds === today;
+                const isSel     = cell.ds && selected === cell.ds;
+                return (
+                  <div
+                    key={ci}
+                    className={['full-cell', cell.other ? 'other-month' : '', isToday ? 'today' : ''].filter(Boolean).join(' ')}
+                    onClick={() => cell.ds && setSelected(s => s === cell.ds ? null : cell.ds)}
+                    style={isSel ? { background: 'var(--primary-lt)' } : undefined}
+                  >
+                    <div className="cell-head-row">
+                      <span className={`cell-num${ci === 0 ? ' holiday-num' : ci === 6 ? ' saturday-num' : ''}`}>
+                        {cell.d}
+                      </span>
+                      {cellTasks.length > 0 && (
+                        <span style={{
+                          fontSize: '0.6rem', fontWeight: 700, padding: '0 5px', borderRadius: 999,
+                          background: 'rgba(99,102,241,0.12)', color: 'var(--indigo-400,#818cf8)',
+                          marginLeft: 'auto',
+                        }}>
+                          {cellTasks.length}
+                        </span>
+                      )}
+                    </div>
+                    <div className="cell-tasks">
+                      {cellTasks.slice(0, 2).map(t => (
+                        <div key={t.id} className={`cell-task ${t.priority}${t.completed ? ' done' : ''}`}
+                          style={{ borderLeft: `3px solid ${PRIORITY_COLOR[t.priority]}` }}>
+                          {t.title}
+                        </div>
+                      ))}
+                      {cellTasks.length > 2 && <div className="more-label">+{cellTasks.length - 2}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+        {/* 선택 날짜 상세 */}
+        {selected && taskMap[selected] && (
+          <DayDetail ds={selected} tasks={taskMap[selected]} onClose={() => setSelected(null)} />
+        )}
+      </div>
+    );
+  }
+
+  // ── 주간 뷰 ─────────────────────────────────────────────
+  function navigateWeek(dir) {
+    setWeekStart(dsAdd(weekStart, dir * 7));
+    setSelected(null);
+  }
+
+  function WeekView() {
+    const days = Array.from({ length: 7 }, (_, i) => dsAdd(weekStart, i));
+    const endStr = days[6];
+    const s = new Date(weekStart + 'T00:00:00');
+    const e = new Date(endStr + 'T00:00:00');
+    const rangeLabel = s.getMonth() === e.getMonth()
+      ? `${s.getFullYear()}년 ${s.getMonth()+1}월 ${s.getDate()}일 – ${e.getDate()}일`
+      : `${s.getMonth()+1}/${s.getDate()} – ${e.getMonth()+1}/${e.getDate()}`;
+
+    return (
+      <div>
+        {/* 주 네비 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <button className="icon-btn" onClick={() => navigateWeek(-1)}><i className="fas fa-chevron-left" /></button>
+          <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)', minWidth: 210, textAlign: 'center' }}>
+            {rangeLabel}
+          </span>
+          <button className="icon-btn" onClick={() => navigateWeek(1)}><i className="fas fa-chevron-right" /></button>
+          <button className="btn-secondary btn-sm" onClick={() => setWeekStart(getWeekStart(today))}>
+            이번 주
+          </button>
+        </div>
+        {/* 7열 그리드 */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>
+          {days.map(ds => {
+            const d        = new Date(ds + 'T00:00:00');
+            const wd       = WD[d.getDay()];
+            const dd       = d.getDate();
+            const isToday  = ds === today;
+            const isPast   = ds < today;
+            const dayTasks = taskMap[ds] ?? [];
+            const isSel    = selected === ds;
+            return (
+              <div
+                key={ds}
+                onClick={() => setSelected(s => s === ds ? null : ds)}
+                style={{
+                  borderRadius: 10, padding: '8px 8px 6px', cursor: 'pointer',
+                  border: `1.5px solid ${isSel ? 'var(--indigo-600,#4f46e5)' : isToday ? 'rgba(99,102,241,0.4)' : 'var(--border)'}`,
+                  background: isSel ? 'var(--primary-lt)' : isToday ? 'rgba(99,102,241,0.04)' : 'var(--card)',
+                  minHeight: 100, transition: 'border-color .12s',
+                }}
+              >
+                {/* 요일/날짜 */}
+                <div style={{ textAlign: 'center', marginBottom: 6 }}>
+                  <div style={{ fontSize: '0.7rem', color: d.getDay() === 0 ? 'var(--red-500)' : d.getDay() === 6 ? '#818cf8' : 'var(--text-sub)', fontWeight: 600 }}>
+                    {wd}
+                  </div>
+                  <div style={{
+                    fontSize: '1rem', fontWeight: isToday ? 800 : 600,
+                    color: isToday ? 'var(--indigo-600,#4f46e5)' : isPast ? 'var(--text-muted,#9ca3af)' : 'var(--text)',
+                    width: 28, height: 28, borderRadius: '50%', lineHeight: '28px', textAlign: 'center', margin: '0 auto',
+                    background: isToday ? 'rgba(99,102,241,0.15)' : 'transparent',
+                  }}>
+                    {dd}
+                  </div>
+                </div>
+                {/* 태스크 */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {dayTasks.slice(0, 3).map(t => (
+                    <div key={t.id} style={{
+                      fontSize: '0.7rem', padding: '2px 5px', borderRadius: 4,
+                      background: PRIORITY_COLOR[t.priority] + '18',
+                      borderLeft: `2px solid ${PRIORITY_COLOR[t.priority]}`,
+                      color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      textDecoration: t.completed ? 'line-through' : 'none', opacity: t.completed ? 0.5 : 1,
+                    }}>
+                      {t.title}
+                    </div>
+                  ))}
+                  {dayTasks.length > 3 && (
+                    <div style={{ fontSize: '0.67rem', color: 'var(--text-muted,#9ca3af)', textAlign: 'center' }}>
+                      +{dayTasks.length - 3}
+                    </div>
+                  )}
+                  {dayTasks.length === 0 && (
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted,#9ca3af)', textAlign: 'center', paddingTop: 4, opacity: 0.5 }}>
+                      —
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {/* 선택 날짜 상세 */}
+        {selected && (
+          <DayDetail ds={selected} tasks={taskMap[selected] ?? []} onClose={() => setSelected(null)} />
+        )}
+      </div>
+    );
+  }
+
+  // ── 날짜 상세 패널 ──────────────────────────────────────
+  function DayDetail({ ds, tasks: dayTasks, onClose }) {
+    const d  = new Date(ds + 'T00:00:00');
+    const label = `${d.getMonth()+1}월 ${d.getDate()}일(${WD[d.getDay()]})`;
+    return (
+      <div style={{
+        marginTop: 12, padding: '12px 16px', borderRadius: 12,
+        background: 'var(--card)', border: '1px solid rgba(99,102,241,0.25)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>{label}</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              className="btn-primary"
+              style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+              onClick={() => { setDate(ds); setShowForm(true); setSelected(null); }}
+            >
+              <i className="fas fa-plus" style={{ marginRight: 5 }} />추가
+            </button>
+            <button className="icon-btn" onClick={onClose}><i className="fas fa-times" /></button>
+          </div>
+        </div>
+        {dayTasks.length === 0 ? (
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-sub)', margin: 0 }}>이날 할 일이 없습니다.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {dayTasks.map(task => <TaskRow key={task.id} task={task} />)}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── 공통 태스크 행 ──────────────────────────────────────
+  function TaskRow({ task }) {
+    const assignee = task.assigned_to ? memberMap[task.assigned_to] : null;
+    const canDel   = task.created_by === user?.id || isOwner;
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 9,
+        padding: '8px 12px', borderRadius: 9,
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        opacity: task.completed ? 0.55 : 1,
+      }}>
+        <button onClick={() => handleToggle(task)} style={{
+          width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+          border: `2px solid ${task.completed ? '#4f46e5' : 'var(--border)'}`,
+          background: task.completed ? '#4f46e5' : 'transparent',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {task.completed && <i className="fas fa-check" style={{ fontSize: '0.5rem', color: '#fff' }} />}
+        </button>
+        <span style={{ flex: 1, fontSize: '0.84rem', fontWeight: 600, color: 'var(--text)', textDecoration: task.completed ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {task.title}
+        </span>
+        <span style={{ fontSize: '0.62rem', fontWeight: 700, padding: '1px 6px', borderRadius: 999, color: PRIORITY_COLOR[task.priority], background: PRIORITY_COLOR[task.priority] + '18', border: `1px solid ${PRIORITY_COLOR[task.priority]}40`, flexShrink: 0 }}>
+          {PRIORITY_KO[task.priority]}
+        </span>
+        {assignee ? (
+          <div title={assignee.name} style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, background: MEMBER_COLORS[assignee.colorIdx % MEMBER_COLORS.length], display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '8px' }}>
+            {(assignee.name || '?')[0].toUpperCase()}
+          </div>
+        ) : (
+          <div style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, border: '1.5px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <i className="fas fa-user" style={{ fontSize: '6px', color: 'var(--text-muted,#9ca3af)' }} />
+          </div>
+        )}
+        {canDel && (
+          <button onClick={() => handleDelete(task.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--text-muted,#9ca3af)', fontSize: '0.7rem', opacity: 0, transition: 'opacity .12s' }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = 'var(--red-500)'; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = 0; e.currentTarget.style.color = 'var(--text-muted,#9ca3af)'; }}>
+            <i className="fas fa-trash" />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '0 20px 28px' }}>
+
+      {/* ── 툴바 ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 8, flexWrap: 'wrap' }}>
+        {/* 뷰 전환 */}
+        <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+          {[['list','목록','fa-list'],['week','주간','fa-calendar-week'],['month','월간','fa-calendar'],['year','연간','fa-calendar-days']].map(([k,label,icon]) => (
+            <button key={k} onClick={() => { setViewMode(k); setSelected(null); }} style={{
+              padding: '5px 12px', fontSize: '0.78rem', cursor: 'pointer',
+              border: 'none', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5,
+              background: viewMode === k ? 'var(--indigo-600,#4f46e5)' : 'var(--surface)',
+              color: viewMode === k ? '#fff' : 'var(--text-sub)',
+            }}>
+              <i className={`fas ${icon}`} style={{ fontSize: '0.72rem' }} />{label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {/* 목록 필터 (목록 뷰에서만) */}
+          {viewMode === 'list' && (
+            <div style={{ display: 'flex', gap: 5 }}>
+              {[['all','전체'],['mine','내 할일'],['done','완료']].map(([k,label]) => (
+                <button key={k} onClick={() => setFilter(k)} style={{
+                  padding: '4px 10px', borderRadius: 20, border: '1px solid var(--border)',
+                  background: filter === k ? 'var(--indigo-600,#4f46e5)' : 'var(--surface)',
+                  color: filter === k ? '#fff' : 'var(--text-sub)',
+                  fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                }}>{label}</button>
+              ))}
+            </div>
+          )}
+          <button onClick={() => { setShowForm(p => !p); setSelected(null); }} className="btn-primary" style={{ fontSize: '0.82rem', padding: '6px 14px' }}>
+            <i className="fas fa-plus" style={{ marginRight: 6 }} />할 일 추가
+          </button>
+        </div>
+      </div>
+
+      {/* ── 추가 폼 ── */}
+      {showForm && (
+        <form onSubmit={handleAdd} style={{
+          padding: '14px 16px', borderRadius: 12, marginBottom: 16,
+          background: 'var(--card)', border: '1px solid rgba(99,102,241,0.25)',
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="팀 할 일 제목 *" required autoFocus className="input-field" />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={{ fontSize: '0.72rem', color: 'var(--text-sub)', fontWeight: 700, display: 'block', marginBottom: 4 }}>날짜</label>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-field" required />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.72rem', color: 'var(--text-sub)', fontWeight: 700, display: 'block', marginBottom: 4 }}>우선순위</label>
+                <select value={priority} onChange={e => setPriority(e.target.value)} className="input-field">
+                  <option value="low">낮음</option>
+                  <option value="medium">보통</option>
+                  <option value="high">높음</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.72rem', color: 'var(--text-sub)', fontWeight: 700, display: 'block', marginBottom: 4 }}>담당자</label>
+                <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)} className="input-field">
+                  <option value="">담당자 없음</option>
+                  {members.map(m => (
+                    <option key={m.user_id} value={m.user_id}>
+                      {m.display_name || m.email?.split('@')[0]}{m.user_id === user?.id ? ' (나)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {err && <p style={{ fontSize: '0.78rem', color: 'var(--red-500)', margin: 0 }}>{err}</p>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button type="button" className="btn-secondary" style={{ fontSize: '0.82rem' }} onClick={() => setShowForm(false)}>취소</button>
+              <button type="submit" className="btn-primary" style={{ fontSize: '0.82rem' }} disabled={saving}>{saving ? '추가 중…' : '추가'}</button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {/* ── 뷰 렌더 ── */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-sub)' }}>
+          <i className="fas fa-spinner fa-spin" style={{ fontSize: '1.4rem' }} />
+        </div>
+      ) : viewMode === 'year' ? (
+        <YearView />
+      ) : viewMode === 'month' ? (
+        <MonthView />
+      ) : viewMode === 'week' ? (
+        <WeekView />
+      ) : (
+        /* 목록 뷰 */
+        Object.keys(groups).length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '56px 0', color: 'var(--text-sub)' }}>
+            <i className="fas fa-clipboard-list" style={{ fontSize: '2.2rem', opacity: 0.2, display: 'block', marginBottom: 12 }} />
+            <p style={{ fontSize: '0.88rem', margin: 0 }}>
+              {filter !== 'all' ? '해당 조건의 할 일이 없습니다' : '팀 할 일을 추가해보세요!'}
+            </p>
+          </div>
+        ) : (
+          Object.entries(groups).sort(([a],[b]) => a.localeCompare(b)).map(([ds, items]) => (
+            <div key={ds} style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: ds < today ? 'var(--red-500)' : ds === today ? 'var(--indigo-600,#4f46e5)' : 'var(--text-sub)' }}>
+                  {dateLabel(ds)}
+                </span>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted,#9ca3af)' }}>
+                  {items.filter(t => t.completed).length}/{items.length} 완료
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {items.map(task => <TaskRow key={task.id} task={task} />)}
+              </div>
+            </div>
+          ))
+        )
       )}
     </div>
   );
