@@ -527,17 +527,33 @@ function DeadlineGroup({ label, icon, iconColor, bgColor, tasks, todayStr }) {
 
 /* ── DeadlineItem ── */
 function DeadlineItem({ task, iconColor, bgColor, todayStr }) {
-  const dl   = new Date(task.deadline + 'T00:00:00');
-  const today = new Date(todayStr + 'T00:00:00');
-  const diff  = Math.round((dl - today) / 86400000);
+  const router    = useRouter();
+  const dl        = new Date(task.deadline + 'T00:00:00');
+  const today     = new Date(todayStr + 'T00:00:00');
+  const diff      = Math.round((dl - today) / 86400000);
   const diffLabel = diff < 0 ? `D+${Math.abs(diff)}` : diff === 0 ? 'D-Day' : `D-${diff}`;
+  const isTeam    = task._source === 'team';
+
+  function handleClick() {
+    if (isTeam && task._teamId) {
+      router.push(`/teams/${task._teamId}?tab=planner`);
+    } else {
+      router.push(`/calendar?date=${task.deadline}`);
+    }
+  }
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 8,
-      padding: '7px 10px', borderRadius: 8,
-      background: bgColor, border: '1px solid var(--border)',
-    }}>
+    <div
+      onClick={handleClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
+        background: bgColor, border: '1px solid var(--border)',
+        transition: 'opacity .12s',
+      }}
+      onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+      onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+    >
       <i className="fas fa-clock" style={{ color: iconColor, fontSize: '0.8rem', flexShrink: 0 }} />
       <span style={{
         flex: 1, fontSize: '0.82rem', color: 'var(--text)', minWidth: 0,
@@ -546,6 +562,15 @@ function DeadlineItem({ task, iconColor, bgColor, todayStr }) {
         {task.title}
       </span>
       <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+        {isTeam && (
+          <span style={{
+            fontSize: '0.6rem', fontWeight: 700, padding: '0 5px', borderRadius: 999,
+            background: 'rgba(99,102,241,0.15)', color: 'var(--indigo-400,#818cf8)',
+            border: '1px solid rgba(99,102,241,0.3)',
+          }}>
+            {task._teamName ?? '팀'}
+          </span>
+        )}
         <span style={{ fontSize: '0.72rem', fontWeight: 800, color: iconColor }}>{diffLabel}</span>
         <span style={{ fontSize: '0.65rem', color: 'var(--text-sub)' }}>{task.deadline}</span>
       </div>

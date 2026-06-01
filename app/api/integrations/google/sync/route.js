@@ -76,9 +76,10 @@ export async function POST(request) {
           user_id:         task.user_id,
           title:           task.title,
           date:            task.date,
-          deadline:        task.deadline,
+          deadline:        task.deadline ?? null,
           completed:       false,
           priority:        'medium',
+          description:     '',
           category:        'Google Calendar',
           google_event_id: task.google_event_id,
         });

@@ -25,5 +25,6 @@ export async function GET() {
       connected_at:   row.connected_at,
     };
   }
+  map._meta = { googleConfigured: !!process.env.GOOGLE_CLIENT_ID };
   return NextResponse.json(map);
 }

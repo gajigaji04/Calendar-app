@@ -106,15 +106,45 @@ function Banner({ type, message, onClose }) {
   );
 }
 
+// ─── 안내 토글 ────────────────────────────────────────────
+function GuideToggle({ children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <button
+        type="button"
+        onClick={() => setOpen(p => !p)}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+          fontSize: '0.77rem', color: 'var(--indigo-400,#818cf8)', fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600,
+        }}
+      >
+        <i className={`fas fa-chevron-${open ? 'up' : 'down'}`} style={{ fontSize: '0.65rem' }} />
+        발급 방법 보기
+      </button>
+      {open && (
+        <div style={{
+          marginTop: 8, padding: '12px 14px', borderRadius: 10,
+          background: 'var(--bg-sub,rgba(0,0,0,0.04))', border: '1px solid var(--border)',
+          fontSize: '0.78rem', color: 'var(--text-sub)', lineHeight: 1.7,
+        }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ────────────────────────────────────────────────────────────
 // ① Google Calendar 카드
 // ────────────────────────────────────────────────────────────
-function GoogleCard({ status, onRefresh }) {
+function GoogleCard({ status, googleConfigured, onRefresh }) {
   const [syncing, setSyncing] = useState(false);
   const [result,  setResult]  = useState('');
 
-  const connected  = !!status?.connected;
-  const lastSync   = status?.last_synced_at;
+  const connected = !!status?.connected;
+  const lastSync  = status?.last_synced_at;
 
   async function handleSync(direction) {
     setSyncing(true); setResult('');
@@ -163,13 +193,19 @@ function GoogleCard({ status, onRefresh }) {
         </div>
       )}
 
-      {!connected ? (
+      {!googleConfigured ? (
+        <div style={{
+          padding: '10px 14px', borderRadius: 9,
+          background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.25)',
+          fontSize: '0.82rem', color: 'var(--text-sub)', lineHeight: 1.55,
+        }}>
+          <i className="fas fa-triangle-exclamation" style={{ color: '#f59e0b', marginRight: 7 }} />
+          서비스 관리자가 Google OAuth를 아직 설정하지 않았습니다. 잠시 후 다시 시도하세요.
+        </div>
+      ) : !connected ? (
         <div>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-sub)', marginBottom: 14, lineHeight: 1.5 }}>
-            Google Calendar와 연결하면 이벤트를 양방향으로 동기화할 수 있습니다.<br />
-            <span style={{ fontSize: '0.77rem', color: 'var(--text-muted,#9ca3af)' }}>
-              ⚙ <code>.env.local</code>에 <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>, <code>NEXT_PUBLIC_APP_URL</code>이 필요합니다.
-            </span>
+            Google 계정으로 로그인하면 Calendar 이벤트를 양방향으로 동기화할 수 있습니다.
           </p>
           <a
             href="/api/integrations/google/auth"
@@ -189,29 +225,16 @@ function GoogleCard({ status, onRefresh }) {
             앞으로 30일간의 Google Calendar 이벤트를 가져오거나, 이 앱의 태스크를 Google Calendar에 추가합니다.
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-            <button
-              className="btn-primary"
-              onClick={() => handleSync('import')}
-              disabled={syncing}
-              style={{ fontSize: '0.83rem', padding: '8px 16px' }}
-            >
+            <button className="btn-primary" onClick={() => handleSync('import')} disabled={syncing} style={{ fontSize: '0.83rem', padding: '8px 16px' }}>
               {syncing ? <Spinner /> : <i className="fas fa-cloud-arrow-down" style={{ marginRight: 7 }} />}
               Google → 앱 가져오기
             </button>
-            <button
-              className="btn-secondary"
-              onClick={() => handleSync('export')}
-              disabled={syncing}
-              style={{ fontSize: '0.83rem', padding: '8px 16px' }}
-            >
-              {syncing ? <Spinner size={14} style={{ borderTopColor: 'var(--text)' }} /> : <i className="fas fa-cloud-arrow-up" style={{ marginRight: 7 }} />}
+            <button className="btn-secondary" onClick={() => handleSync('export')} disabled={syncing} style={{ fontSize: '0.83rem', padding: '8px 16px' }}>
+              {syncing ? <Spinner size={14} /> : <i className="fas fa-cloud-arrow-up" style={{ marginRight: 7 }} />}
               앱 → Google 내보내기
             </button>
           </div>
-          <button
-            onClick={handleDisconnect}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--red-500)', padding: 0, fontFamily: 'inherit' }}
-          >
+          <button onClick={handleDisconnect} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--red-500)', padding: 0, fontFamily: 'inherit' }}>
             <i className="fas fa-unlink" style={{ marginRight: 5 }} />연결 해제
           </button>
         </div>
@@ -302,13 +325,18 @@ function NotionCard({ status, onRefresh }) {
 
       {!connected || showForm ? (
         <form onSubmit={handleConnect}>
-          <p style={{ fontSize: '0.82rem', color: 'var(--text-sub)', marginBottom: 12, lineHeight: 1.5 }}>
-            Notion Integration Token과 동기화할 데이터베이스 ID를 입력하세요.{' '}
-            <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener noreferrer"
-              style={{ color: 'var(--indigo-400,#818cf8)', fontSize: '0.77rem' }}>
-              토큰 발급 →
-            </a>
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-sub)', marginBottom: 10, lineHeight: 1.5 }}>
+            Notion Integration Token과 동기화할 데이터베이스 ID를 입력하세요.
           </p>
+          <GuideToggle>
+            <ol style={{ margin: 0, paddingLeft: 18 }}>
+              <li><a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--indigo-400,#818cf8)' }}>notion.so/my-integrations</a> 접속 → <strong>새 API 통합 만들기</strong></li>
+              <li>이름 입력 후 저장 → <strong>내부 통합 시크릿</strong> 복사 (<code>secret_xxx...</code>)</li>
+              <li>Notion에서 동기화할 데이터베이스 페이지 열기</li>
+              <li>우측 상단 <strong>···</strong> → <strong>연결 추가</strong> → 방금 만든 통합 선택</li>
+              <li>데이터베이스 URL에서 ID 복사: <code>notion.so/<strong>여기32자</strong>?v=...</code></li>
+            </ol>
+          </GuideToggle>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
             <div>
               <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-sub)', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -485,13 +513,18 @@ function SlackCard({ status, onRefresh }) {
 
       {!connected || showForm ? (
         <form onSubmit={handleConnect}>
-          <p style={{ fontSize: '0.82rem', color: 'var(--text-sub)', marginBottom: 12, lineHeight: 1.5 }}>
-            Slack Incoming Webhook URL을 입력하면 할 일 알림을 받을 수 있습니다.{' '}
-            <a href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noopener noreferrer"
-              style={{ color: '#4A154B', fontSize: '0.77rem' }}>
-              Webhook 생성 →
-            </a>
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-sub)', marginBottom: 10, lineHeight: 1.5 }}>
+            Slack Incoming Webhook URL을 입력하면 할 일 알림을 받을 수 있습니다.
           </p>
+          <GuideToggle>
+            <ol style={{ margin: 0, paddingLeft: 18 }}>
+              <li><a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--indigo-400,#818cf8)' }}>api.slack.com/apps</a> → <strong>Create New App</strong> → From scratch</li>
+              <li>앱 이름 입력 후 워크스페이스 선택 → <strong>Create App</strong></li>
+              <li>좌측 메뉴 <strong>Incoming Webhooks</strong> → 토글 <strong>On</strong></li>
+              <li><strong>Add New Webhook to Workspace</strong> → 알림 받을 채널 선택</li>
+              <li>생성된 URL 복사: <code>https://hooks.slack.com/services/T.../B.../...</code></li>
+            </ol>
+          </GuideToggle>
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-sub)', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Incoming Webhook URL
@@ -606,7 +639,9 @@ export default function IntegrationsPage() {
 
   useEffect(() => { loadStatuses(); }, [loadStatuses]);
 
-  const connectedCount = Object.values(statuses).filter(s => s?.connected).length;
+  const googleConfigured = statuses._meta?.googleConfigured ?? false;
+  const connectedCount   = ['google_calendar', 'notion', 'slack']
+    .filter(k => statuses[k]?.connected).length;
 
   return (
     <div className="page-wrapper" style={{ maxWidth: 660, margin: '0 auto' }}>
@@ -665,7 +700,7 @@ export default function IntegrationsPage() {
         </div>
       ) : (
         <>
-          <GoogleCard status={statuses.google_calendar} onRefresh={loadStatuses} />
+          <GoogleCard status={statuses.google_calendar} googleConfigured={googleConfigured} onRefresh={loadStatuses} />
           <NotionCard  status={statuses.notion}          onRefresh={loadStatuses} />
           <SlackCard   status={statuses.slack}           onRefresh={loadStatuses} />
         </>

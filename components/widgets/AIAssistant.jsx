@@ -1,7 +1,8 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/AuthContext';
-import { getTasksByUser } from '@/models/taskModel';
+import { getTasksByDateRange, getTasksByUserIds } from '@/models/taskModel';
+import { getUserTeams, getTeamMembers } from '@/models/teamModel';
 
 const SUGGESTIONS = [
   '오늘 할일 어떻게 정리할까요?',
@@ -29,8 +30,8 @@ export default function AIAssistant() {
   const [open,    setOpen]    = useState(false);
   const [msgs,    setMsgs]    = useState([]);   // { role, content, streaming? }
   const [input,   setInput]   = useState('');
-  const [busy,    setBusy]    = useState(false);
-  const [noKey,   setNoKey]   = useState(false);
+  const [busy,      setBusy]      = useState(false);
+  const [connError, setConnError] = useState(false);
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
 
@@ -45,16 +46,48 @@ export default function AIAssistant() {
   async function buildContext() {
     if (!user) return '';
     try {
-      const tasks = await getTasksByUser(user.id);
       const today = new Date().toISOString().split('T')[0];
-      const todayTasks  = tasks.filter(t => !t.completed && t.date === today);
-      const overdue     = tasks.filter(t => !t.completed && t.date < today);
-      const upcoming    = tasks.filter(t => !t.completed && t.date > today).slice(0, 5);
-      return [
-        `오늘(${today}) 할일: ${todayTasks.map(t => `${t.title}(${t.priority})`).join(', ') || '없음'}`,
-        overdue.length > 0 ? `미완료 지연: ${overdue.length}개` : '',
-        upcoming.length > 0 ? `예정 할일: ${upcoming.map(t => t.title).join(', ')}` : '',
+      const end14 = new Date(); end14.setDate(end14.getDate() + 14);
+      const end14Str = end14.toISOString().split('T')[0];
+
+      // 내 일정 (오늘 ~ 14일)
+      const myTasks    = await getTasksByDateRange(user.id, today, end14Str);
+      const todayMine  = myTasks.filter(t => !t.completed && t.date === today);
+      const upcoming   = myTasks.filter(t => !t.completed && t.date > today);
+
+      const myLines = [
+        `[나의 일정]`,
+        `오늘(${today}): ${todayMine.length ? todayMine.map(t => `${t.title}${t.due_time ? ' ' + t.due_time : ''}`).join(', ') : '없음'}`,
+        upcoming.length ? `향후 14일: ${upcoming.map(t => `${t.date} ${t.title}${t.due_time ? ' ' + t.due_time : ''}`).join(' / ')}` : '',
       ].filter(Boolean).join('\n');
+
+      // 팀원 일정
+      const teams = await getUserTeams(user.id);
+      const teamLines = [];
+
+      for (const team of teams) {
+        const members     = await getTeamMembers(team.id);
+        const others      = members.filter(m => m.user_id !== user.id);
+        if (!others.length) continue;
+
+        const memberTasks = await getTasksByUserIds(others.map(m => m.user_id), today, end14Str);
+
+        const byMember = Object.fromEntries(
+          others.map(m => [m.user_id, { name: m.display_name || m.email || '멤버', tasks: [] }])
+        );
+        for (const t of memberTasks) {
+          if (!t.completed && byMember[t.user_id]) byMember[t.user_id].tasks.push(t);
+        }
+
+        const desc = Object.values(byMember)
+          .filter(m => m.tasks.length)
+          .map(m => `  ${m.name}: ${m.tasks.map(t => `${t.date} ${t.title}${t.due_time ? ' ' + t.due_time : ''}`).join(', ')}`)
+          .join('\n');
+
+        if (desc) teamLines.push(`[팀: ${team.name}]\n${desc}`);
+      }
+
+      return [myLines, ...teamLines].filter(Boolean).join('\n\n');
     } catch { return ''; }
   }
 
@@ -63,7 +96,7 @@ export default function AIAssistant() {
     if (!userMsg || busy) return;
     setInput('');
     setBusy(true);
-    setNoKey(false);
+    setConnError(false);
 
     const newMsgs = [...msgs, { role: 'user', content: userMsg }];
     setMsgs(newMsgs);
@@ -83,7 +116,7 @@ export default function AIAssistant() {
         }),
       });
 
-      if (res.status === 503) { setNoKey(true); setMsgs(prev => prev.slice(0, -1)); setBusy(false); return; }
+      if (res.status === 503) { setConnError(true); setMsgs(prev => prev.slice(0, -1)); setBusy(false); return; }
       if (!res.ok) throw new Error(`API 오류 (${res.status})`);
 
       const reader = res.body.getReader();
@@ -156,7 +189,7 @@ export default function AIAssistant() {
             </div>
             <div>
               <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>AI 비서</div>
-              <div style={{ fontSize: '0.68rem', color: 'var(--text-sub)' }}>claude haiku · 생산성 도우미</div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-sub)' }}>Groq · 생산성 도우미</div>
             </div>
             {msgs.length > 0 && (
               <button onClick={() => setMsgs([])} style={{
@@ -171,19 +204,19 @@ export default function AIAssistant() {
           {/* 메시지 영역 */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {/* API 키 없음 */}
-            {noKey && (
+            {connError && (
               <div style={{
                 padding: '10px 12px', borderRadius: 10,
                 background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
                 fontSize: '0.78rem', color: '#f59e0b',
               }}>
                 <i className="fas fa-triangle-exclamation" style={{ marginRight: 6 }} />
-                <code>.env.local</code>에 <code>ANTHROPIC_API_KEY</code>를 설정해야 AI 비서를 사용할 수 있습니다.
+                <code>.env.local</code>에 <code>GROQ_API_KEY</code>를 설정해야 AI 비서를 사용할 수 있습니다.
               </div>
             )}
 
             {/* 빈 상태 */}
-            {msgs.length === 0 && !noKey && (
+            {msgs.length === 0 && !connError && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 16, gap: 12 }}>
                 <div style={{ fontSize: '2rem' }}>✨</div>
                 <p style={{ fontSize: '0.83rem', color: 'var(--text-sub)', textAlign: 'center', lineHeight: 1.5 }}>

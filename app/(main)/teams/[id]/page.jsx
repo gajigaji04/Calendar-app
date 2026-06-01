@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { getTeam, getTeamMembers, removeMember, leaveTeam, regenerateInviteCode } from '@/models/teamModel';
 import { getTasksByUserIds } from '@/models/taskModel';
 import { getTeamTasks, createTeamTask, toggleTeamTask, deleteTeamTask } from '@/models/teamTaskModel';
+import TaskModal from '@/components/task/TaskModal';
 
 const DAYS   = ['일','월','화','수','목','금','토'];
 const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
@@ -16,7 +17,6 @@ function toDateStr(d) {
 function addDays(ds, n) {
   const d = new Date(ds + 'T00:00:00'); d.setDate(d.getDate() + n); return toDateStr(d);
 }
-function getWeight(t) { return { high: 3, medium: 2, low: 1 }[t.priority] ?? 1; }
 
 // ─── 서브 컴포넌트 ────────────────────────────────────────
 
@@ -55,12 +55,11 @@ function ReportTab({ tasks, members, today }) {
         <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-sub)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           팀 요약
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
           {[
-            { label: '전체 할일', value: report.total,       icon: 'fa-list-check',     color: 'var(--indigo-400,#818cf8)' },
-            { label: '완료',     value: report.completed,    icon: 'fa-circle-check',   color: 'var(--green-500)' },
-            { label: '완료율',   value: report.rate + '%',   icon: 'fa-chart-pie',      color: '#f59e0b' },
-            { label: '과부하 멤버', value: report.overloaded.length, icon: 'fa-fire', color: 'var(--red-500)' },
+            { label: '전체 할일', value: report.total,     icon: 'fa-list-check',   color: 'var(--indigo-400,#818cf8)' },
+            { label: '완료',     value: report.completed,  icon: 'fa-circle-check', color: 'var(--green-500)' },
+            { label: '완료율',   value: report.rate + '%', icon: 'fa-chart-pie',    color: '#f59e0b' },
           ].map(s => (
             <div key={s.label} style={{ textAlign: 'center', padding: '12px 8px', borderRadius: 10, background: 'var(--bg-sub,rgba(0,0,0,0.04))', border: '1px solid var(--border)' }}>
               <i className={`fas ${s.icon}`} style={{ color: s.color, fontSize: '1.1rem', marginBottom: 6, display: 'block' }} />
@@ -78,9 +77,10 @@ function ReportTab({ tasks, members, today }) {
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {report.memberStats.map((ms) => {
-            const maxScore = Math.max(...report.memberStats.map(m => m.score), 1);
-            const pct      = Math.round((ms.score / maxScore) * 100);
-            const isOver   = ms.score >= 7;
+            const maxTotal = Math.max(...report.memberStats.map(m => m.total), 1);
+            const pct      = Math.round((ms.done / Math.max(ms.total, 1)) * 100);
+            const barWidth = Math.round((ms.total / maxTotal) * 100);
+            const color    = MEMBER_COLORS[members.findIndex(m => m.user_id === ms.userId) % MEMBER_COLORS.length];
             return (
               <div key={ms.userId}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
@@ -88,35 +88,27 @@ function ReportTab({ tasks, members, today }) {
                   <span style={{ fontSize: '0.83rem', fontWeight: 600, color: 'var(--text)', flex: 1 }}>
                     {ms.name}
                   </span>
-                  {isOver && (
-                    <span style={{
-                      fontSize: '0.65rem', fontWeight: 700, padding: '1px 7px', borderRadius: 999,
-                      background: 'rgba(239,68,68,0.1)', color: 'var(--red-500)',
-                      border: '1px solid rgba(239,68,68,0.25)',
-                    }}>⚡ 과부하</span>
-                  )}
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-sub)', minWidth: 60, textAlign: 'right' }}>
                     {ms.done}/{ms.total} 완료
                   </span>
                 </div>
-                {/* 진행 바 */}
                 <div style={{ height: 6, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
                   <div style={{
                     height: '100%', borderRadius: 4,
-                    width: pct + '%',
-                    background: isOver
-                      ? 'linear-gradient(90deg, #ef4444, #f97316)'
-                      : `linear-gradient(90deg, ${MEMBER_COLORS[members.findIndex(m => m.user_id === ms.userId) % MEMBER_COLORS.length]}, ${MEMBER_COLORS[members.findIndex(m => m.user_id === ms.userId) % MEMBER_COLORS.length]}aa)`,
-                    transition: 'width .4s ease',
-                  }} />
+                    width: barWidth + '%',
+                    background: `linear-gradient(90deg, ${color}, ${color}aa)`,
+                    position: 'relative', transition: 'width .4s ease',
+                  }}>
+                    <div style={{
+                      position: 'absolute', top: 0, left: 0, bottom: 0,
+                      width: pct + '%',
+                      background: color,
+                      borderRadius: 4,
+                    }} />
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: 10, marginTop: 3 }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted,#9ca3af)' }}>부하 {ms.score}점</span>
-                  {ms.overdueCnt > 0 && (
-                    <span style={{ fontSize: '0.7rem', color: 'var(--red-500)' }}>
-                      <i className="fas fa-clock" style={{ marginRight: 3 }} />미완료 {ms.overdueCnt}개
-                    </span>
-                  )}
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted,#9ca3af)', marginTop: 3 }}>
+                  완료율 {pct}% · 남은 할일 {ms.remaining}개
                 </div>
               </div>
             );
@@ -124,92 +116,6 @@ function ReportTab({ tasks, members, today }) {
         </div>
       </div>
 
-      {/* 일정 충돌 날짜 */}
-      {report.conflictDays.length > 0 && (
-        <div className="card">
-          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-sub)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            <i className="fas fa-triangle-exclamation" style={{ color: '#f59e0b', marginRight: 6 }} />
-            일정 집중 날짜 (상위 5일)
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {report.conflictDays.slice(0, 5).map(cd => {
-              const d    = new Date(cd.date + 'T00:00:00');
-              const wd   = DAYS[d.getDay()];
-              const past = cd.date < today;
-              return (
-                <div key={cd.date} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '8px 12px', borderRadius: 8,
-                  background: cd.score >= 10 ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.06)',
-                  border: `1px solid ${cd.score >= 10 ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)'}`,
-                  opacity: past ? 0.55 : 1,
-                }}>
-                  <div>
-                    <span style={{ fontWeight: 700, fontSize: '0.87rem', color: 'var(--text)' }}>
-                      {d.getMonth() + 1}월 {d.getDate()}일({wd})
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-sub)', marginLeft: 8 }}>
-                      {cd.memberCount}명 · {cd.taskCount}개 할일
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: -4 }}>
-                    {cd.memberIds.slice(0, 4).map(uid => {
-                      const mi = members.findIndex(m => m.user_id === uid);
-                      return (
-                        <div key={uid} style={{
-                          width: 22, height: 22, borderRadius: '50%', marginLeft: -6,
-                          background: MEMBER_COLORS[mi % MEMBER_COLORS.length],
-                          border: '2px solid var(--card)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: '#fff', fontSize: '0.6rem', fontWeight: 700,
-                        }}>
-                          {(members[mi]?.display_name || members[mi]?.email || '?')[0].toUpperCase()}
-                        </div>
-                      );
-                    })}
-                    {cd.memberIds.length > 4 && (
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-sub)', marginLeft: 6, alignSelf: 'center' }}>
-                        +{cd.memberIds.length - 4}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* 과부하 멤버 */}
-      {report.overloaded.length > 0 && (
-        <div className="card" style={{ borderColor: 'rgba(239,68,68,0.2)' }}>
-          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--red-500)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            <i className="fas fa-fire" style={{ marginRight: 6 }} />
-            과부하 감지 멤버
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {report.overloaded.map(ms => {
-              const mi = members.findIndex(m => m.user_id === ms.userId);
-              return (
-                <div key={ms.userId} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '8px 12px', borderRadius: 8,
-                  background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)',
-                }}>
-                  <MemberAvatar member={ms} idx={mi} size={30} />
-                  <div style={{ flex: 1 }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)' }}>{ms.name}</span>
-                    <p style={{ fontSize: '0.73rem', color: 'var(--text-sub)', margin: 0 }}>
-                      부하 {ms.score}점 · 미완료 {ms.remaining}개 (높음 {ms.highCount}개)
-                    </p>
-                  </div>
-                  <i className="fas fa-fire" style={{ color: 'var(--red-500)', opacity: 0.7 }} />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* 이번 주 완료율 */}
       <div className="card">
@@ -272,56 +178,25 @@ function WeekProgress({ tasks, today }) {
 
 // ─── 리포트 계산 ──────────────────────────────────────────
 function computeReport(tasks, members, today) {
-  const futureTasks = tasks.filter(t => t.date >= today && !t.completed);
-  const total       = tasks.length;
-  const completed   = tasks.filter(t => t.completed).length;
-  const rate        = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const total     = tasks.length;
+  const completed = tasks.filter(t => t.completed).length;
+  const rate      = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-  // 멤버별 통계
   const memberStats = members.map(m => {
-    const mt         = tasks.filter(t => t.user_id === m.user_id);
-    const mFuture    = mt.filter(t => !t.completed && t.date >= today);
-    const mOverdue   = mt.filter(t => !t.completed && t.date < today);
-    const score      = mFuture.reduce((s, t) => s + getWeight(t), 0);
-    const highCount  = mFuture.filter(t => t.priority === 'high').length;
+    const mt      = tasks.filter(t => t.user_id === m.user_id);
+    const pending = mt.filter(t => !t.completed && t.date >= today);
     return {
-      userId:     m.user_id,
-      name:       m.display_name || m.email?.split('@')[0] || '멤버',
+      userId:       m.user_id,
+      name:         m.display_name || m.email?.split('@')[0] || '멤버',
       display_name: m.display_name,
-      email:      m.email,
-      total:      mt.length,
-      done:       mt.filter(t => t.completed).length,
-      remaining:  mFuture.length,
-      score,
-      highCount,
-      overdueCnt: mOverdue.length,
+      email:        m.email,
+      total:        mt.length,
+      done:         mt.filter(t => t.completed).length,
+      remaining:    pending.length,
     };
-  }).sort((a, b) => b.score - a.score);
+  }).sort((a, b) => b.remaining - a.remaining);
 
-  // 과부하 멤버 (부하 점수 7 이상)
-  const overloaded = memberStats.filter(m => m.score >= 7);
-
-  // 날짜별 집중 분석
-  const dateMap = {};
-  futureTasks.forEach(t => {
-    if (!dateMap[t.date]) dateMap[t.date] = { taskCount: 0, score: 0, memberIds: new Set() };
-    dateMap[t.date].taskCount++;
-    dateMap[t.date].score += getWeight(t);
-    dateMap[t.date].memberIds.add(t.user_id);
-  });
-
-  const conflictDays = Object.entries(dateMap)
-    .filter(([, v]) => v.memberIds.size >= 2 && v.score >= 5)
-    .sort(([, a], [, b]) => b.score - a.score)
-    .map(([date, v]) => ({
-      date,
-      score:       v.score,
-      taskCount:   v.taskCount,
-      memberCount: v.memberIds.size,
-      memberIds:   [...v.memberIds],
-    }));
-
-  return { total, completed, rate, memberStats, overloaded, conflictDays };
+  return { total, completed, rate, memberStats };
 }
 
 // ─── 메인 페이지 ──────────────────────────────────────────
@@ -344,6 +219,7 @@ export default function TeamCalendarPage() {
     const d = new Date(now); d.setDate(d.getDate() - d.getDay()); return toDateStr(d);
   });
   const [panel,         setPanel]         = useState(null);
+  const [addModal,      setAddModal]      = useState(null); // 날짜 패널에서 할일 추가
   const [tab,           setTab]           = useState('calendar');
   const [copied,        setCopied]        = useState(false);
   const [filterMembers, setFilterMembers] = useState(new Set());
@@ -465,12 +341,6 @@ export default function TeamCalendarPage() {
   visibleTasks.forEach(t => {
     if (!taskMap[t.date]) taskMap[t.date] = [];
     taskMap[t.date].push(t);
-  });
-
-  // 날짜별 부하 점수 (필터 미적용 전체 기준)
-  const loadMap = {};
-  monthTasks.forEach(t => {
-    loadMap[t.date] = (loadMap[t.date] ?? 0) + getWeight(t);
   });
 
   const cells = [];
@@ -662,17 +532,24 @@ export default function TeamCalendarPage() {
               </div>
               <div className="card" style={{ flex: 1, minHeight: 0, padding: 0, overflow: 'auto', display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
                 {weekDays.map((ds, ci) => {
-                  const d      = new Date(ds + 'T00:00:00');
-                  const isTd   = ds === todayStr;
-                  const isPast = ds < todayStr;
-                  const dayT   = wTaskMap[ds] ?? [];
+                  const d       = new Date(ds + 'T00:00:00');
+                  const isTd    = ds === todayStr;
+                  const isPast  = ds < todayStr;
+                  const dayT    = wTaskMap[ds] ?? [];
+                  const holiday = KO_HOLIDAYS[ds];
+                  const isHoliday = !!holiday || ci === 0;
                   return (
                     <div key={ds} style={{ borderRight: ci < 6 ? '1px solid var(--border)' : 'none', display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ padding: '8px 4px', textAlign: 'center', borderBottom: '1px solid var(--border)', background: isTd ? 'rgba(99,102,241,0.06)' : 'transparent' }}>
-                        <div style={{ fontSize: '0.68rem', color: ci === 0 ? 'var(--red-500)' : ci === 6 ? '#818cf8' : 'var(--text-sub)', fontWeight: 600 }}>{DAYS[ci]}</div>
-                        <div style={{ fontSize: '1rem', fontWeight: isTd ? 800 : 600, margin: '2px auto', width: 28, height: 28, borderRadius: '50%', lineHeight: '28px', background: isTd ? '#4f46e5' : 'transparent', color: isTd ? '#fff' : isPast ? 'var(--text-muted,#9ca3af)' : 'var(--text)' }}>
+                      <div style={{ padding: '8px 4px', textAlign: 'center', borderBottom: '1px solid var(--border)', background: isTd ? 'rgba(99,102,241,0.06)' : holiday ? 'rgba(239,68,68,0.03)' : 'transparent' }}>
+                        <div style={{ fontSize: '0.68rem', color: isHoliday ? 'var(--red-500)' : ci === 6 ? '#818cf8' : 'var(--text-sub)', fontWeight: 600 }}>{DAYS[ci]}</div>
+                        <div style={{ fontSize: '1rem', fontWeight: isTd ? 800 : 600, margin: '2px auto', width: 28, height: 28, borderRadius: '50%', lineHeight: '28px', background: isTd ? '#4f46e5' : 'transparent', color: isTd ? '#fff' : isPast ? 'var(--text-muted,#9ca3af)' : isHoliday ? 'var(--red-500)' : 'var(--text)' }}>
                           {d.getDate()}
                         </div>
+                        {holiday && (
+                          <div style={{ fontSize: '0.55rem', color: 'var(--red-500)', fontWeight: 600, lineHeight: 1.2, padding: '0 2px', wordBreak: 'keep-all' }}>
+                            {holiday}
+                          </div>
+                        )}
                         {dayT.length > 0 && <div style={{ fontSize: '0.62rem', color: 'var(--indigo-400,#818cf8)', fontWeight: 700 }}>{dayT.length}</div>}
                       </div>
                       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 3px', display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -710,39 +587,23 @@ export default function TeamCalendarPage() {
                   <div key={wi} className="full-grid">
                     {week.map((cell, ci) => {
                       const cellTasks = cell.ds ? (taskMap[cell.ds] || []) : [];
-                      const loadScore = cell.ds ? (loadMap[cell.ds] ?? 0) : 0;
                       const isToday   = cell.ds === todayStr;
-                      const isOverload = loadScore >= 7;
-                      const isHighLoad = loadScore >= 4 && loadScore < 7;
                       const isSun     = ci === 0;
                       const isSat     = ci === 6;
+                      const holiday   = cell.ds ? KO_HOLIDAYS[cell.ds] : null;
                       return (
                         <div
                           key={wi * 7 + ci}
                           className={['full-cell', cell.other ? 'other-month' : '', isToday ? 'today' : ''].filter(Boolean).join(' ')}
                           onClick={() => cell.ds && setPanel(p => p === cell.ds ? null : cell.ds)}
-                          style={{
-                            ...(panel === cell.ds ? { background: 'var(--primary-lt)' } : {}),
-                            ...(isOverload && !cell.other ? { borderBottom: '3px solid var(--red-500)' } : {}),
-                            ...(isHighLoad && !cell.other ? { borderBottom: '3px solid #f59e0b' } : {}),
-                          }}
+                          style={panel === cell.ds ? { background: 'var(--primary-lt)' } : undefined}
                         >
                           <div className="cell-head-row">
-                            <span className={`cell-num${isSun || (cell.ds && KO_HOLIDAYS[cell.ds]) ? ' holiday-num' : isSat ? ' saturday-num' : ''}`}>
+                            <span className={`cell-num${isSun || holiday ? ' holiday-num' : isSat ? ' saturday-num' : ''}`}>
                               {cell.d}
                             </span>
-                            {/* 부하 인디케이터 */}
-                            {!cell.other && loadScore > 0 && (
-                              <span style={{
-                                fontSize: '0.6rem', fontWeight: 700, padding: '0px 5px', borderRadius: 999,
-                                background: isOverload ? 'rgba(239,68,68,0.12)' : isHighLoad ? 'rgba(245,158,11,0.12)' : 'rgba(99,102,241,0.1)',
-                                color: isOverload ? 'var(--red-500)' : isHighLoad ? '#f59e0b' : 'var(--indigo-400)',
-                                marginLeft: 'auto',
-                              }}>
-                                {loadScore}
-                              </span>
-                            )}
                           </div>
+                          {holiday && <div className="cell-holiday-name">{holiday}</div>}
                           <div className="cell-tasks">
                             {cellTasks.slice(0, 3).map(t => (
                               <div
@@ -773,7 +634,12 @@ export default function TeamCalendarPage() {
               <div className="card cal-day-panel" style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '0 0 0 16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>{panel}</span>
-                  <button className="icon-btn" onClick={() => setPanel(null)}><i className="fas fa-times" /></button>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button className="btn-primary btn-sm" onClick={() => setAddModal(panel)}>
+                      <i className="fas fa-plus" />
+                    </button>
+                    <button className="icon-btn" onClick={() => setPanel(null)}><i className="fas fa-times" /></button>
+                  </div>
                 </div>
                 {panelTasks.length === 0 ? (
                   <p style={{ color: 'var(--text-sub)', fontSize: '0.83rem', textAlign: 'center', padding: '16px 0' }}>
@@ -813,6 +679,16 @@ export default function TeamCalendarPage() {
             )}
           </div>}
         </>
+      )}
+
+      {/* 날짜 패널 할일 추가 모달 */}
+      {addModal && (
+        <TaskModal
+          task={null}
+          defaultDate={addModal}
+          onClose={() => setAddModal(null)}
+          onSave={async () => { setAddModal(null); await loadAll(); }}
+        />
       )}
 
       {/* ─── 플래너 탭 ─── */}
@@ -863,14 +739,13 @@ export default function TeamCalendarPage() {
             {members.map((m, i) => {
               const memberStat = computeReport(reportTasks, members, todayStr).memberStats
                 .find(s => s.userId === m.user_id);
-              const isOver = (memberStat?.score ?? 0) >= 7;
               return (
                 <div key={m.user_id} style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '12px 18px',
                   borderBottom: i < members.length - 1 ? '1px solid var(--border)' : 'none',
                 }}>
-                  <MemberAvatar member={m} idx={i} size={36} showBadge={isOver} badgeColor="var(--red-500)" />
+                  <MemberAvatar member={m} idx={i} size={36} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text)',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -880,8 +755,7 @@ export default function TeamCalendarPage() {
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)' }}>{m.email}</div>
                     {memberStat && (
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-sub)', marginTop: 2 }}>
-                        완료 {memberStat.done}/{memberStat.total} · 부하 {memberStat.score}점
-                        {isOver && <span style={{ color: 'var(--red-500)', marginLeft: 6 }}>⚡ 과부하</span>}
+                        완료 {memberStat.done}/{memberStat.total} · 남은 할일 {memberStat.remaining}개
                       </div>
                     )}
                   </div>
@@ -1308,7 +1182,11 @@ function PlannerTab({ teamId, members, user }) {
   // ── 공통 태스크 행 ──────────────────────────────────────
   function TaskRow({ task }) {
     const assignee = task.assigned_to ? memberMap[task.assigned_to] : null;
+    const creator  = task.created_by  ? memberMap[task.created_by]  : null;
     const canDel   = task.created_by === user?.id || isOwner;
+    const isMe     = task.created_by === user?.id;
+    const creatorLabel = isMe ? '나' : (creator?.name ?? '알 수 없음');
+
     return (
       <div style={{
         display: 'flex', alignItems: 'center', gap: 9,
@@ -1324,14 +1202,24 @@ function PlannerTab({ teamId, members, user }) {
         }}>
           {task.completed && <i className="fas fa-check" style={{ fontSize: '0.5rem', color: '#fff' }} />}
         </button>
+
         <span style={{ flex: 1, fontSize: '0.84rem', fontWeight: 600, color: 'var(--text)', textDecoration: task.completed ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {task.title}
         </span>
+
+        {/* 작성자 */}
+        <span style={{ fontSize: '0.62rem', color: 'var(--text-sub)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
+          <i className="fas fa-pen-to-square" style={{ fontSize: '0.55rem', opacity: 0.6 }} />
+          {creatorLabel}
+        </span>
+
         <span style={{ fontSize: '0.62rem', fontWeight: 700, padding: '1px 6px', borderRadius: 999, color: PRIORITY_COLOR[task.priority], background: PRIORITY_COLOR[task.priority] + '18', border: `1px solid ${PRIORITY_COLOR[task.priority]}40`, flexShrink: 0 }}>
           {PRIORITY_KO[task.priority]}
         </span>
+
+        {/* 담당자 아바타 */}
         {assignee ? (
-          <div title={assignee.name} style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, background: MEMBER_COLORS[assignee.colorIdx % MEMBER_COLORS.length], display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '8px' }}>
+          <div title={`담당: ${assignee.name}`} style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, background: MEMBER_COLORS[assignee.colorIdx % MEMBER_COLORS.length], display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '8px' }}>
             {(assignee.name || '?')[0].toUpperCase()}
           </div>
         ) : (
@@ -1339,6 +1227,7 @@ function PlannerTab({ teamId, members, user }) {
             <i className="fas fa-user" style={{ fontSize: '6px', color: 'var(--text-muted,#9ca3af)' }} />
           </div>
         )}
+
         {canDel && (
           <button onClick={() => handleDelete(task.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--text-muted,#9ca3af)', fontSize: '0.7rem', opacity: 0, transition: 'opacity .12s' }}
             onMouseEnter={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = 'var(--red-500)'; }}
@@ -1475,10 +1364,21 @@ function PlannerTab({ teamId, members, user }) {
 }
 
 const KO_HOLIDAYS = {
-  '2025-01-01':'신정','2025-03-01':'삼일절','2025-05-05':'어린이날·부처님오신날',
-  '2025-06-06':'현충일','2025-08-15':'광복절','2025-10-03':'개천절',
-  '2025-10-06':'추석','2025-10-09':'한글날','2025-12-25':'성탄절',
-  '2026-01-01':'신정','2026-02-17':'설날','2026-03-01':'삼일절',
-  '2026-05-05':'어린이날','2026-06-06':'현충일','2026-08-15':'광복절',
-  '2026-09-25':'추석','2026-10-03':'개천절','2026-10-09':'한글날','2026-12-25':'성탄절',
+  '2024-01-01':'신정','2024-02-09':'설날 전날','2024-02-10':'설날','2024-02-11':'설날','2024-02-12':'대체공휴일',
+  '2024-03-01':'삼일절','2024-05-05':'어린이날','2024-05-06':'대체공휴일','2024-05-15':'부처님오신날',
+  '2024-06-06':'현충일','2024-08-15':'광복절',
+  '2024-09-16':'추석 전날','2024-09-17':'추석','2024-09-18':'추석',
+  '2024-10-03':'개천절','2024-10-09':'한글날','2024-12-25':'성탄절',
+  '2025-01-01':'신정','2025-01-28':'설날 전날','2025-01-29':'설날','2025-01-30':'설날','2025-02-03':'대체공휴일',
+  '2025-03-01':'삼일절','2025-03-03':'대체공휴일',
+  '2025-05-05':'어린이날·부처님오신날','2025-05-06':'대체공휴일',
+  '2025-06-06':'현충일','2025-08-15':'광복절',
+  '2025-10-03':'개천절','2025-10-05':'추석 전날','2025-10-06':'추석','2025-10-07':'추석',
+  '2025-10-08':'대체공휴일','2025-10-09':'한글날','2025-12-25':'성탄절',
+  '2026-01-01':'신정','2026-02-16':'설날 전날','2026-02-17':'설날','2026-02-18':'설날',
+  '2026-03-01':'삼일절','2026-03-02':'대체공휴일',
+  '2026-05-05':'어린이날','2026-05-24':'부처님오신날',
+  '2026-06-06':'현충일','2026-08-15':'광복절',
+  '2026-09-24':'추석 전날','2026-09-25':'추석','2026-09-26':'추석',
+  '2026-10-03':'개천절','2026-10-09':'한글날','2026-12-25':'성탄절',
 };
