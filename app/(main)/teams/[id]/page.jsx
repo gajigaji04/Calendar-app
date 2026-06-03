@@ -417,7 +417,7 @@ export default function TeamCalendarPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+          <div className="team-tab-row" style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
             {[['calendar','캘린더'],['planner','플래너'],['report','리포트'],['members','멤버']].map(([key,label]) => (
               <button key={key} onClick={() => setTab(key)} style={{
                 padding: '5px 14px', fontSize: '0.82rem', cursor: 'pointer',

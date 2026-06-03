@@ -836,3 +836,69 @@ body {
     justify-content: center;
   }
 }
+
+/* ════════════════════════════════════════
+   랜딩 페이지 반응형
+════════════════════════════════════════ */
+.landing-section-pad   { padding-left: 48px; padding-right: 48px; }
+.landing-hero-grid     { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+.landing-features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.landing-pricing-grid  { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+
+/* 태블릿 */
+@media (max-width: 1023px) {
+  .landing-section-pad   { padding-left: 24px; padding-right: 24px; }
+  .landing-features-grid { grid-template-columns: repeat(2, 1fr); }
+  .landing-pricing-grid  { grid-template-columns: 1fr; max-width: 480px; margin-left: auto; margin-right: auto; }
+}
+
+/* 모바일 */
+@media (max-width: 767px) {
+  .landing-section-pad   { padding-left: 16px; padding-right: 16px; }
+  .landing-hero-grid     { grid-template-columns: 1fr; gap: 32px; }
+  .landing-features-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .landing-mockup        { display: none; }
+  .landing-pricing-grid  { grid-template-columns: 1fr; max-width: 100%; }
+  .landing-nav-inner     { padding-left: 16px !important; padding-right: 16px !important; }
+  .landing-hero-section  { padding-top: 100px !important; padding-bottom: 48px !important; }
+  .landing-sub-section   { padding-top: 48px !important; padding-bottom: 48px !important; }
+}
+
+/* 소형 모바일 */
+@media (max-width: 480px) {
+  .landing-features-grid { grid-template-columns: 1fr; }
+}
+
+/* ════════════════════════════════════════
+   캘린더 앱 모바일 추가 수정
+════════════════════════════════════════ */
+/* 탭 버튼 overflow 방지 */
+@media (max-width: 767px) {
+  .view-tab-group {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-shrink: 0;
+  }
+  .view-tab-group::-webkit-scrollbar { display: none; }
+
+  /* 캘린더 헤더 버튼 폰트 줄임 */
+  .view-header .btn-secondary,
+  .view-header .btn-primary {
+    font-size: 0.75rem;
+    padding: 5px 8px;
+  }
+
+  /* 월뷰 기간 바 텍스트 숨김 */
+  .span-bar { font-size: 0 !important; }
+
+  /* 팀 캘린더 탭 wrap */
+  .team-tab-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .team-tab-row::-webkit-scrollbar { display: none; }
+  .team-tab-row button { flex-shrink: 0; font-size: 0.75rem; padding: 5px 10px; }
+}

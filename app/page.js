@@ -170,7 +170,7 @@ export default function LandingPage() {
 
       {/* ── NAV ── */}
       <nav style={{ position:'fixed', top:0, left:0, right:0, zIndex:100, height:'64px', display:'flex', alignItems:'center', background:'rgba(7,7,17,0.8)', backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'0 24px', width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div className="landing-nav-inner" style={{ maxWidth:'1280px', margin:'0 auto', padding:'0 24px', width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
             <Logo size={32} gradId="navLg" />
             <span style={{ fontWeight:800, fontSize:'17px', letterSpacing:'-0.025em', color:TEXT }}>
@@ -192,9 +192,9 @@ export default function LandingPage() {
       </nav>
 
       {/* ── HERO ── */}
-      <section style={{ position:'relative', zIndex:1, paddingTop:'148px', paddingBottom:'88px' }}>
-        <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'0 48px' }}>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'56px', alignItems:'center' }}>
+      <section className="landing-hero-section" style={{ position:'relative', zIndex:1, paddingTop:'148px', paddingBottom:'88px' }}>
+        <div className="landing-section-pad" style={{ maxWidth:'1280px', margin:'0 auto' }}>
+          <div className="landing-hero-grid">
 
             {/* copy */}
             <div className="animate-fade-up">
@@ -229,7 +229,7 @@ export default function LandingPage() {
             </div>
 
             {/* mockup */}
-            <div style={{ filter:'drop-shadow(0 40px 60px rgba(99,102,241,0.15))' }}>
+            <div className="landing-mockup" style={{ filter:'drop-shadow(0 40px 60px rgba(99,102,241,0.15))' }}>
               <CalendarMockup />
             </div>
           </div>
@@ -237,8 +237,8 @@ export default function LandingPage() {
       </section>
 
       {/* ── FEATURES ── */}
-      <section style={{ position:'relative', zIndex:1, paddingTop:'88px', paddingBottom:'88px' }}>
-        <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'0 48px' }}>
+      <section className="landing-sub-section" style={{ position:'relative', zIndex:1, paddingTop:'88px', paddingBottom:'88px' }}>
+        <div className="landing-section-pad" style={{ maxWidth:'1280px', margin:'0 auto' }}>
           <div style={{ textAlign:'center', marginBottom:'56px' }}>
             <div style={{ display:'inline-flex', alignItems:'center', gap:'6px', background:'rgba(139,92,246,0.12)', border:'1px solid rgba(139,92,246,0.25)', borderRadius:'999px', padding:'5px 14px', marginBottom:'16px', fontSize:'12px', fontWeight:700, color:'#c4b5fd', letterSpacing:'0.04em' }}>
               ✦&nbsp; 핵심 기능
@@ -251,7 +251,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'20px' }}>
+          <div className="landing-features-grid">
             {FEATURES.map(f=>(
               <div key={f.title} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:'16px', padding:'24px', transition:'border-color .2s, transform .2s', cursor:'default' }}
                 onMouseEnter={undefined}>
@@ -267,8 +267,8 @@ export default function LandingPage() {
       </section>
 
       {/* ── PRICING ── */}
-      <section style={{ position:'relative', zIndex:1, paddingTop:'88px', paddingBottom:'88px', background:'rgba(255,255,255,0.015)', borderTop:'1px solid rgba(255,255,255,0.05)', borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
-        <div style={{ maxWidth:'1100px', margin:'0 auto', padding:'0 48px' }}>
+      <section className="landing-sub-section" style={{ position:'relative', zIndex:1, paddingTop:'88px', paddingBottom:'88px', background:'rgba(255,255,255,0.015)', borderTop:'1px solid rgba(255,255,255,0.05)', borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
+        <div className="landing-section-pad" style={{ maxWidth:'1100px', margin:'0 auto' }}>
           <div style={{ textAlign:'center', marginBottom:'56px' }}>
             <div style={{ display:'inline-flex', alignItems:'center', gap:'6px', background:'rgba(16,185,129,0.12)', border:'1px solid rgba(16,185,129,0.25)', borderRadius:'999px', padding:'5px 14px', marginBottom:'16px', fontSize:'12px', fontWeight:700, color:'#6ee7b7', letterSpacing:'0.04em' }}>
               ✦&nbsp; 요금제
@@ -279,7 +279,7 @@ export default function LandingPage() {
             <p style={{ fontSize:'16px', color:MUTED }}>무료로 시작하고, 필요할 때 업그레이드하세요.</p>
           </div>
 
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'24px' }}>
+          <div className="landing-pricing-grid">
             {PLANS.map(p=>{
               if (p.featured) return (
                 <div key={p.name} style={{ background:'linear-gradient(135deg,#6366f1,#8b5cf6)', padding:'1.5px', borderRadius:'20px', boxShadow:'0 0 48px rgba(99,102,241,0.3)' }}>
@@ -306,8 +306,8 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA ── */}
-      <section style={{ position:'relative', zIndex:1, paddingTop:'88px', paddingBottom:'88px' }}>
-        <div style={{ maxWidth:'720px', margin:'0 auto', padding:'0 48px', textAlign:'center' }}>
+      <section className="landing-sub-section" style={{ position:'relative', zIndex:1, paddingTop:'88px', paddingBottom:'88px' }}>
+        <div className="landing-section-pad" style={{ maxWidth:'720px', margin:'0 auto', textAlign:'center' }}>
           <div style={{ background:'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.12))', border:'1px solid rgba(99,102,241,0.22)', borderRadius:'28px', padding:'60px 32px', position:'relative', overflow:'hidden' }}>
             <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse at 50% 0%, rgba(99,102,241,0.1), transparent 60%)', pointerEvents:'none' }} />
             <h2 style={{ fontSize:'clamp(1.8rem,4vw,2.8rem)', fontWeight:900, letterSpacing:'-0.03em', marginBottom:'14px', position:'relative' }}>
@@ -325,7 +325,7 @@ export default function LandingPage() {
 
       {/* ── FOOTER ── */}
       <footer style={{ borderTop:'1px solid rgba(255,255,255,0.06)', paddingTop:'32px', paddingBottom:'32px', position:'relative', zIndex:1 }}>
-        <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'0 48px', display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'space-between', gap:'16px' }}>
+        <div className="landing-section-pad" style={{ maxWidth:'1280px', margin:'0 auto', display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'space-between', gap:'16px' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
             <Logo size={24} gradId="footLg" />
             <span style={{ fontWeight:800, fontSize:'15px', color:TEXT }}>
