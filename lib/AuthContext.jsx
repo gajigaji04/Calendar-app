@@ -39,13 +39,45 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(() => getSupabase().auth.signOut(), []);
 
-  /** 회원가입 후 이메일 OTP 인증 */
+  /** 이메일로 6자리 인증 코드 전송 */
+  const sendVerificationCode = useCallback(async (email, name) => {
+    const res = await fetch('/api/auth/send-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, name }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { error: data.error || '코드 전송 실패' };
+    return { ok: true, devMode: data.devMode };
+  }, []);
+
+  /** 인증 코드 확인 후 유저 생성 + 로그인 */
+  const verifyEmailCode = useCallback(async (email, code, password, name) => {
+    const res = await fetch('/api/auth/verify-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code, password, name }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { error: data.error || '인증 실패' };
+
+    const { error: signInError } = await getSupabase().auth.signInWithPassword({ email, password });
+    if (signInError) return { error: signInError.message };
+    return { ok: true };
+  }, []);
+
+  /** 인증 코드 재전송 */
+  const resendVerificationCode = useCallback(async (email, name) => {
+    return sendVerificationCode(email, name);
+  }, [sendVerificationCode]);
+
+  /** 회원가입 후 이메일 OTP 인증 (레거시 — 로그인 화면의 "미인증 재진입" 경로용) */
   const verifyOtp = useCallback(async (email, token) => {
     const { error } = await getSupabase().auth.verifyOtp({ email, token, type: 'email' });
     return error;
   }, []);
 
-  /** OTP 재전송 */
+  /** OTP 재전송 (레거시) */
   const resendOtp = useCallback(async (email) => {
     const { error } = await getSupabase().auth.resend({ type: 'signup', email });
     return error;
@@ -66,7 +98,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, verifyOtp, resendOtp, resetPassword, updatePassword }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, verifyOtp, resendOtp, sendVerificationCode, verifyEmailCode, resendVerificationCode, resetPassword, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );

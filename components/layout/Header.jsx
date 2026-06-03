@@ -1,9 +1,11 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import { useDeadlineAlerts } from '@/lib/useDeadlineAlerts';
 import { useTheme } from '@/lib/ThemeContext';
+import { toggleComplete } from '@/models/taskModel';
 
 function Logo({ size = 28, gradId = 'hdrLg' }) {
   return (
@@ -26,21 +28,48 @@ function Logo({ size = 28, gradId = 'hdrLg' }) {
   );
 }
 
-function AlertSection({ label, color, bg, tasks }) {
+function AlertSection({ label, color, bg, tasks, onTaskClick, onToggle }) {
   return (
     <div>
       <div style={{ padding: '5px 14px', fontSize: '0.71rem', fontWeight: 700, color, background: bg }}>
         {label} ({tasks.length})
       </div>
       {tasks.map(t => (
-        <div key={t.id} style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ fontSize: '0.82rem', color: 'var(--text)', fontWeight: 500,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {t.title}
-          </div>
-          <div style={{ fontSize: '0.71rem', color: 'var(--text-sub)', marginTop: 2 }}>
-            <i className="fas fa-flag" style={{ marginRight: 4, color }} />
-            마감 {t.deadline}
+        <div
+          key={t.id}
+          onClick={() => onTaskClick(t)}
+          style={{
+            padding: '8px 14px', borderBottom: '1px solid var(--border)',
+            cursor: 'pointer', transition: 'background .1s',
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+          onMouseLeave={e => e.currentTarget.style.background = ''}
+        >
+          <button
+            onClick={e => { e.stopPropagation(); onToggle(t); }}
+            title="완료 처리"
+            style={{
+              width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+              border: '2px solid var(--border)',
+              background: 'transparent',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: '0.6rem', transition: 'all .12s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = color; e.currentTarget.style.background = color; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'transparent'; }}
+          >
+            <i className="fas fa-check" />
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '0.82rem', color: 'var(--text)', fontWeight: 500,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {t.title}
+            </div>
+            <div style={{ fontSize: '0.71rem', color: 'var(--text-sub)', marginTop: 2 }}>
+              <i className="fas fa-flag" style={{ marginRight: 4, color }} />
+              마감 {t.deadline}
+            </div>
           </div>
         </div>
       ))}
@@ -50,11 +79,23 @@ function AlertSection({ label, color, bg, tasks }) {
 
 export default function Header({ onMenuClick }) {
   const { user, signOut } = useAuth();
-  const { overdue, dueToday, soon, urgentCount } = useDeadlineAlerts();
+  const { overdue, dueToday, soon, urgentCount, refresh } = useDeadlineAlerts();
   const { theme, toggleTheme } = useTheme();
+  const router = useRouter();
 
   const [dropOpen, setDropOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
+
+  function handleTaskClick(task) {
+    setBellOpen(false);
+    router.push(`/tasks?open=${task.id}`);
+  }
+
+  async function handleToggle(task) {
+    await toggleComplete(task.id, task.completed);
+    refresh();
+  }
+
   const dropRef = useRef(null);
   const bellRef = useRef(null);
 
@@ -174,13 +215,13 @@ export default function Header({ onMenuClick }) {
                 ) : (
                   <>
                     {overdue.length > 0 && (
-                      <AlertSection label="마감 초과" color="var(--red-500)" bg="rgba(239,68,68,0.07)" tasks={overdue} />
+                      <AlertSection label="마감 초과" color="var(--red-500)" bg="rgba(239,68,68,0.07)" tasks={overdue} onTaskClick={handleTaskClick} onToggle={handleToggle} />
                     )}
                     {dueToday.length > 0 && (
-                      <AlertSection label="오늘 마감" color="var(--amber-500)" bg="rgba(245,158,11,0.07)" tasks={dueToday} />
+                      <AlertSection label="오늘 마감" color="var(--amber-500)" bg="rgba(245,158,11,0.07)" tasks={dueToday} onTaskClick={handleTaskClick} onToggle={handleToggle} />
                     )}
                     {soon.length > 0 && (
-                      <AlertSection label="7일 이내" color="var(--indigo-600)" bg="rgba(99,102,241,0.07)" tasks={soon} />
+                      <AlertSection label="7일 이내" color="var(--indigo-600)" bg="rgba(99,102,241,0.07)" tasks={soon} onTaskClick={handleTaskClick} onToggle={handleToggle} />
                     )}
                   </>
                 )}

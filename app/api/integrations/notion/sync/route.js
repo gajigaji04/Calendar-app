@@ -26,8 +26,8 @@ export async function POST(request) {
   if (!row) return NextResponse.json({ error: 'Notion이 연결되지 않았습니다.' }, { status: 400 });
 
   const token      = row.access_token;
-  const databaseId = row.settings?.databaseId;
-  if (!databaseId) return NextResponse.json({ error: 'Database ID가 없습니다.' }, { status: 400 });
+  const databaseId = row.settings?.database_id ?? row.settings?.databaseId; // 구 버전 호환
+  if (!databaseId) return NextResponse.json({ error: '동기화할 데이터베이스를 먼저 선택해주세요.' }, { status: 400 });
 
   if (direction === 'import') {
     const pages = await getPages(token, databaseId);
@@ -57,12 +57,11 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, imported: created, total: pages.length });
 
   } else if (direction === 'export') {
-    if (taskIds.length === 0) {
-      return NextResponse.json({ error: '내보낼 태스크를 선택하세요.' }, { status: 400 });
-    }
-
+    const today = new Date().toISOString().split('T')[0];
     const all   = await getTasksByUser(user.id);
-    const tasks = all.filter(t => taskIds.includes(t.id) && !t.notion_page_id);
+    const tasks = taskIds.length > 0
+      ? all.filter(t => taskIds.includes(t.id) && !t.notion_page_id)
+      : all.filter(t => !t.completed && !t.notion_page_id && t.date >= today);
     let exported = 0;
 
     for (const task of tasks) {

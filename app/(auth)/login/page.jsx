@@ -139,32 +139,40 @@ function OtpInput({ value, onChange }) {
    메인 페이지
 ═══════════════════════════════════════ */
 export default function LoginPage() {
-  const { signIn, signUp, verifyOtp, resendOtp, resetPassword } = useAuth();
+  const { signIn, sendVerificationCode, verifyEmailCode, resendVerificationCode, resetPassword } = useAuth();
 
   // mode: 'login' | 'register' | 'verify' | 'forgot'
-  const [mode,          setMode]          = useState('login');
-  const [name,          setName]          = useState('');
-  const [email,         setEmail]         = useState('');
-  const [password,      setPassword]      = useState('');
-  const [pwConfirm,     setPwConfirm]     = useState('');
-  const [otp,           setOtp]           = useState('');
-  const [pendingEmail,  setPendingEmail]  = useState('');
-  const [agreeTerms,    setAgreeTerms]    = useState(false);
-  const [agreePrivacy,  setAgreePrivacy]  = useState(false);
-  const [loading,       setLoading]       = useState(false);
-  const [socialLoading, setSocialLoading] = useState('');
-  const [error,         setError]         = useState('');
-  const [success,       setSuccess]       = useState('');
-  const [focusedField,  setFocusedField]  = useState('');
-  const [hoveredSocial, setHoveredSocial] = useState('');
-  const [resendCooldown, setResendCooldown] = useState(0);
+  const [mode,            setMode]            = useState('login');
+  const [name,            setName]            = useState('');
+  const [email,           setEmail]           = useState('');
+  const [password,        setPassword]        = useState('');
+  const [pwConfirm,       setPwConfirm]       = useState('');
+  const [otp,             setOtp]             = useState('');
+  const [pendingEmail,    setPendingEmail]    = useState('');
+  const [pendingPassword, setPendingPassword] = useState('');
+  const [pendingName,     setPendingName]     = useState('');
+  const [agreeTerms,      setAgreeTerms]      = useState(false);
+  const [agreePrivacy,    setAgreePrivacy]    = useState(false);
+  const [loading,         setLoading]         = useState(false);
+  const [socialLoading,   setSocialLoading]   = useState('');
+  const [error,           setError]           = useState('');
+  const [success,         setSuccess]         = useState('');
+  const [focusedField,    setFocusedField]    = useState('');
+  const [hoveredSocial,   setHoveredSocial]   = useState('');
+  const [resendCooldown,  setResendCooldown]  = useState(0);
+  const [codeExpiry,      setCodeExpiry]      = useState(0); // 남은 초
 
-  // 재전송 쿨다운 타이머
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const id = setTimeout(() => setResendCooldown(c => c - 1), 1000);
     return () => clearTimeout(id);
   }, [resendCooldown]);
+
+  useEffect(() => {
+    if (codeExpiry <= 0) return;
+    const id = setTimeout(() => setCodeExpiry(c => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [codeExpiry]);
 
   function reset() { setError(''); setSuccess(''); }
 
@@ -211,48 +219,58 @@ export default function LoginPage() {
   /* ── 회원가입 ── */
   async function handleRegister(e) {
     e.preventDefault(); reset();
-    if (!name.trim())          { setError('이름을 입력해주세요.'); return; }
-    if (password.length < 8)   { setError('비밀번호는 8자 이상이어야 합니다.'); return; }
+    if (!name.trim())           { setError('이름을 입력해주세요.'); return; }
+    if (password.length < 8)    { setError('비밀번호는 8자 이상이어야 합니다.'); return; }
     if (password !== pwConfirm) { setError('비밀번호가 일치하지 않습니다.'); return; }
-    if (!agreeTerms)           { setError('이용약관에 동의해주세요.'); return; }
-    if (!agreePrivacy)         { setError('개인정보처리방침에 동의해주세요.'); return; }
+    if (!agreeTerms)            { setError('이용약관에 동의해주세요.'); return; }
+    if (!agreePrivacy)          { setError('개인정보처리방침에 동의해주세요.'); return; }
     setLoading(true);
-    const err = await signUp(email, password, name);
-    if (err) {
-      if (err.message?.includes('already registered') || err.message?.includes('already been registered')) {
-        setError('이미 가입된 이메일입니다. 로그인을 시도해보세요.');
-      } else {
-        setError(err.message);
-      }
+    const result = await sendVerificationCode(email, name);
+    if (result.error) {
+      setError(result.error);
     } else {
       setPendingEmail(email);
+      setPendingPassword(password);
+      setPendingName(name);
+      setOtp('');
       setMode('verify');
       setResendCooldown(60);
+      setCodeExpiry(300);
+      if (result.devMode) {
+        setSuccess('SMTP 미설정 — 서버 콘솔에서 인증 코드를 확인하세요.');
+      }
     }
     setLoading(false);
   }
 
-  /* ── OTP 인증 ── */
+  /* ── 인증 코드 확인 ── */
   async function handleVerify(e) {
     e.preventDefault(); reset();
-    if (otp.length !== 6) { setError('6자리 인증 코드를 모두 입력해주세요.'); return; }
+    if (otp.replace(/\s/g, '').length !== 6) {
+      setError('6자리 인증 코드를 모두 입력해주세요.'); return;
+    }
     setLoading(true);
-    const err = await verifyOtp(pendingEmail, otp);
-    if (err) {
-      setError('인증 코드가 올바르지 않거나 만료되었습니다. 다시 확인해주세요.');
+    const result = await verifyEmailCode(pendingEmail, otp, pendingPassword, pendingName);
+    if (result.error) {
+      setError(result.error);
     } else {
       setSuccess('인증 완료! 대시보드로 이동합니다 🎉');
     }
     setLoading(false);
   }
 
-  /* ── OTP 재전송 ── */
+  /* ── 코드 재전송 ── */
   async function handleResend() {
     if (resendCooldown > 0) return;
-    setLoading(true); reset();
-    const err = await resendOtp(pendingEmail);
-    if (err) setError(err.message);
-    else { setSuccess('인증 코드를 재전송했습니다. 메일함을 확인하세요.'); setResendCooldown(60); }
+    setLoading(true); reset(); setOtp('');
+    const result = await resendVerificationCode(pendingEmail, pendingName);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      setSuccess('새 인증 코드를 발송했습니다. 메일함을 확인하세요.');
+      setResendCooldown(60);
+      setCodeExpiry(300);
+    }
     setLoading(false);
   }
 
@@ -478,11 +496,23 @@ export default function LoginPage() {
         {/* ═══ VERIFY ═══ */}
         {mode === 'verify' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div style={{ textAlign: 'center', padding: '8px 0' }}>
+
+            {/* 발송 안내 */}
+            <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>
+              <span style={{ color: '#a5b4fc', fontWeight: 700 }}>{pendingEmail}</span> 으로<br/>
+              6자리 인증 코드를 발송했습니다.
+            </div>
+
+            {/* OTP 입력 */}
+            <div style={{ textAlign: 'center' }}>
               <OtpInput value={otp} onChange={setOtp} />
-              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: 12 }}>
-                이메일이 없다면 스팸함을 확인하거나 링크를 직접 클릭하세요
-              </p>
+
+              {/* 만료 타이머 */}
+              <div style={{ marginTop: 12, fontSize: 12, color: codeExpiry > 60 ? 'rgba(255,255,255,0.3)' : codeExpiry > 0 ? '#f97316' : '#ef4444' }}>
+                {codeExpiry > 0
+                  ? `유효 시간 ${Math.floor(codeExpiry / 60)}:${String(codeExpiry % 60).padStart(2, '0')} 남음`
+                  : '⚠ 코드가 만료되었습니다. 재전송해주세요.'}
+              </div>
             </div>
 
             <Feedback />
@@ -500,10 +530,18 @@ export default function LoginPage() {
                 {resendCooldown > 0 ? `재전송 (${resendCooldown}s)` : '코드 재전송'}
               </button>
               <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
-              <button onClick={() => goMode('login')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, padding: 0 }}>
+              <button
+                type="button"
+                onClick={() => { goMode('login'); setPendingPassword(''); setPendingName(''); }}
+                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, padding: 0 }}
+              >
                 로그인으로 돌아가기
               </button>
             </div>
+
+            <p style={{ textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,0.25)', margin: 0 }}>
+              메일이 안 보이면 스팸함을 확인해주세요
+            </p>
           </div>
         )}
 

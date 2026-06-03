@@ -6,7 +6,7 @@ import {
   getEvents, eventToTask, createEvent,
   refreshAccessToken,
 } from '@/lib/integrations/googleCalendar';
-import { createTask, getTasksByUser } from '@/models/taskModel';
+import { getTasksByUser } from '@/models/taskModel';
 
 /** 토큰 만료 시 자동 갱신 */
 async function ensureFreshToken(row, sb) {
@@ -95,14 +95,19 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, imported: created, skipped: events.length - created });
 
   } else if (direction === 'export') {
-    // 선택한 태스크를 Google Calendar에 이벤트로 추가
-    if (taskIds.length === 0) {
-      return NextResponse.json({ error: '내보낼 태스크를 선택하세요.' }, { status: 400 });
+    const today = new Date().toISOString().split('T')[0];
+    const all   = await getTasksByUser(user.id);
+
+    // taskIds 지정 시 선택 항목만, 없으면 아직 Google에 없는 미완료 예정 태스크 전체
+    const tasks = taskIds.length > 0
+      ? all.filter(t => taskIds.includes(t.id))
+      : all.filter(t => !t.completed && !t.google_event_id && t.date >= today);
+
+    if (tasks.length === 0) {
+      return NextResponse.json({ ok: true, exported: 0 });
     }
 
-    const all   = await getTasksByUser(user.id);
-    const tasks = all.filter(t => taskIds.includes(t.id));
-    let   exported = 0;
+    let exported = 0;
 
     for (const task of tasks) {
       try {

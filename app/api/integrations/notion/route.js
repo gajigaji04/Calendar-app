@@ -2,38 +2,32 @@ export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { getServerUser, getServiceSupabase } from '@/lib/supabaseServer';
-import { testConnection } from '@/lib/integrations/notion';
+import { getUserPlan, planAllows, planGateResponse } from '@/lib/planCheck';
 
-/** POST — 토큰 + DB ID 연결 */
-export async function POST(request) {
+/** PATCH — OAuth 후 데이터베이스 선택 저장 */
+export async function PATCH(request) {
   const user = await getServerUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
-  const { token, databaseId } = await request.json().catch(() => ({}));
-  if (!token || !databaseId) {
-    return NextResponse.json({ error: 'token과 databaseId가 필요합니다.' }, { status: 400 });
-  }
+  const plan = await getUserPlan(user.id);
+  if (!planAllows(plan, 'pro')) return planGateResponse();
 
-  // 연결 테스트
-  let dbInfo;
-  try {
-    dbInfo = await testConnection(token, databaseId);
-  } catch (e) {
-    return NextResponse.json({ error: `연결 실패: ${e.message}` }, { status: 400 });
-  }
+  const { databaseId, databaseTitle } = await request.json().catch(() => ({}));
+  if (!databaseId) return NextResponse.json({ error: 'databaseId가 필요합니다.' }, { status: 400 });
 
   const sb = getServiceSupabase();
-  const { error } = await sb.from('integrations').upsert({
-    user_id:      user.id,
-    service:      'notion',
-    access_token: token,
-    settings:     { databaseId, databaseTitle: dbInfo.title },
-    connected_at: new Date().toISOString(),
-  }, { onConflict: 'user_id,service' });
+  const { data: row } = await sb
+    .from('integrations').select('settings')
+    .eq('user_id', user.id).eq('service', 'notion').single();
+
+  if (!row) return NextResponse.json({ error: 'Notion이 연결되지 않았습니다.' }, { status: 400 });
+
+  const { error } = await sb.from('integrations')
+    .update({ settings: { ...row.settings, database_id: databaseId, database_title: databaseTitle ?? null } })
+    .eq('user_id', user.id).eq('service', 'notion');
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json({ ok: true, database: dbInfo });
+  return NextResponse.json({ ok: true });
 }
 
 /** DELETE — 연결 해제 */
@@ -41,8 +35,8 @@ export async function DELETE() {
   const user = await getServerUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
-  const sb = getServiceSupabase();
-  await sb.from('integrations')
+  await getServiceSupabase()
+    .from('integrations')
     .delete()
     .eq('user_id', user.id)
     .eq('service', 'notion');

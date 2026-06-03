@@ -1,5 +1,6 @@
 'use client';
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import { getTasksByUser, getTasksByDateRange, toggleComplete } from '@/models/taskModel';
 import { useDeadlineAlerts } from '@/lib/useDeadlineAlerts';
@@ -140,8 +141,13 @@ function ExportModal({ userId, onClose }) {
 
 /* ── 메인 페이지 ── */
 export default function TasksPage() {
+  return <Suspense><TasksPageInner /></Suspense>;
+}
+
+function TasksPageInner() {
   const { user } = useAuth();
   const { refresh: refreshAlerts } = useDeadlineAlerts();
+  const searchParams = useSearchParams();
   const today = toDateStr(new Date());
 
   const [allTasks,      setAllTasks]      = useState([]);
@@ -158,6 +164,14 @@ export default function TasksPage() {
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const openId = searchParams.get('open');
+    if (!openId || allTasks.length === 0) return;
+    const target = allTasks.find(t => t.id === openId);
+    if (target) setModal(target);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allTasks]);
 
   /* 완료 통계 */
   const doneCount  = allTasks.filter(t => t.completed).length;

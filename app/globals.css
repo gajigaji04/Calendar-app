@@ -234,7 +234,7 @@ body {
    Modal
 ───────────────────────────────────── */
 .modal-overlay {
-  position: fixed; inset: 0; z-index: 50;
+  position: fixed; inset: 0; z-index: 1100;
   background: rgba(0,0,0,0.4);
   display: flex; align-items: center; justify-content: center;
   padding: 16px;
@@ -372,6 +372,7 @@ body {
 }
 .full-cell:nth-child(7n) { border-right: none; }
 .full-cell:hover { background: var(--indigo-50); }
+.full-cell.touch-drag-over { outline: 2px dashed var(--primary); outline-offset: -2px; background: var(--indigo-50); }
 .full-cell.other-month { background: rgba(0,0,0,0.02); }
 .full-cell.other-month:hover { background: rgba(0,0,0,0.04); }
 .full-cell.today .cell-num { background: var(--indigo-600); color: #fff; }
@@ -659,6 +660,21 @@ body {
   border-color: transparent;
 }
 
+/* AI 비서 FAB */
+.fab-ai-btn   { position: fixed; bottom: 20px;  right: 78px; z-index: 1001; }
+.fab-ai-panel { position: fixed; bottom: 76px;  right: 78px; z-index: 1000; }
+/* 채팅 FAB */
+.fab-chat-btn   { position: fixed; bottom: 20px;  right: 20px; z-index: 1001; }
+.fab-chat-panel { position: fixed; bottom: 78px; right: 20px; z-index: 1000; }
+
+/* 모바일: 탭바(56px) 위로 올림 */
+@media (max-width: 767px) {
+  .fab-ai-btn     { bottom: calc(56px + 12px); right: 72px; }
+  .fab-ai-panel   { bottom: calc(56px + 12px + 54px); right: 72px; width: calc(100vw - 24px) !important; max-width: 360px; }
+  .fab-chat-btn   { bottom: calc(56px + 12px); right: 12px; }
+  .fab-chat-panel { bottom: calc(56px + 12px + 54px); right: 12px; width: calc(100vw - 24px) !important; max-width: 380px; }
+}
+
 /* ─────────────────────────────────────
    Utilities
 ───────────────────────────────────── */
@@ -704,3 +720,119 @@ body {
 [data-theme="dark"] .deadline-badge.dl-soon    { background: rgba(217,119,6,0.18);  color: #fcd34d; border-color: rgba(217,119,6,0.35); }
 [data-theme="dark"] .deadline-badge.dl-near    { background: rgba(202,138,4,0.18);  color: #fef08a; border-color: rgba(202,138,4,0.35); }
 [data-theme="dark"] .deadline-badge.dl-week    { background: rgba(22,163,74,0.18);  color: #86efac; border-color: rgba(22,163,74,0.35); }
+
+/* ─────────────────────────────────────
+   Calendar — 날짜 패널 모바일 오버레이
+───────────────────────────────────── */
+.cal-panel-overlay {
+  display: none;
+}
+@media (max-width: 767px) {
+  .cal-panel-overlay {
+    display: block;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 39;
+  }
+  .cal-day-panel {
+    position: fixed !important;
+    bottom: 56px; left: 0; right: 0;
+    width: 100% !important;
+    max-height: 55vh;
+    overflow-y: auto;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
+    margin: 0 !important;
+    z-index: 40;
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+  }
+}
+
+/* ─────────────────────────────────────
+   Mobile — 반응형 레이아웃
+───────────────────────────────────── */
+
+/* 헤더 — 모바일에서 이름 숨김 */
+@media (max-width: 480px) {
+  .hdr-username { display: none; }
+  .hdr-chevron  { display: none; }
+}
+
+/* 대시보드 stat 카드: 4열 → 2열 */
+.dash-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+@media (max-width: 767px) {
+  .dash-stat-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* 대시보드 메인 그리드: 2열 → 1열 */
+.dash-main-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .dash-main-grid { grid-template-columns: 1fr; }
+}
+
+/* 달력 셀 — 모바일에서 높이 축소 */
+@media (max-width: 767px) {
+  .full-cell { min-height: 56px; padding: 3px 4px; }
+  .cell-num  { width: 20px; height: 20px; font-size: 0.72rem; }
+  .cell-task { font-size: 0.6rem; }
+  .cell-holiday-name { display: none; } /* 공휴일 이름 숨김 (공간 부족) */
+  .view-header { padding: 12px 12px 10px; }
+  .page-wrapper { padding: 12px 12px 24px; }
+  .cal-day-panel { width: 100% !important; margin: 0 !important; }
+}
+
+/* 주간 뷰 — 모바일에서 가로 스크롤 */
+@media (max-width: 767px) {
+  .week-grid {
+    grid-template-columns: repeat(7, minmax(100px, 1fr));
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .week-col-hdr { padding: 6px 4px 5px; }
+  .week-col-body { min-height: 120px; padding: 3px; }
+  .week-task { font-size: 0.65rem; padding: 1px 4px; }
+}
+
+/* 연간 뷰 — 이미 반응형이지만 모바일 간격 축소 */
+@media (max-width: 480px) {
+  .year-grid { gap: 8px; padding: 12px; }
+}
+
+/* 모달 — 모바일 중앙 정렬 */
+@media (max-width: 600px) {
+  .modal-overlay { padding: 16px; align-items: center; }
+  .modal-card    { border-radius: var(--radius-lg); max-height: 90vh; overflow-y: auto; }
+}
+
+/* filter-bar — 모바일 스크롤 */
+@media (max-width: 767px) {
+  .filter-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 12px 0;
+    scrollbar-width: none;
+  }
+  .filter-bar::-webkit-scrollbar { display: none; }
+  .filter-btn { flex-shrink: 0; }
+}
+
+/* 연동 페이지 카드 버튼 — 모바일 세로 배열 */
+@media (max-width: 480px) {
+  .integration-btn-row {
+    flex-direction: column !important;
+  }
+  .integration-btn-row button,
+  .integration-btn-row a {
+    width: 100%;
+    justify-content: center;
+  }
+}

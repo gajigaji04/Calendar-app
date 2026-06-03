@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { useTheme } from '@/lib/ThemeContext';
 import { getSupabase } from '@/lib/supabase';
-import { requestNotificationPermission } from '@/lib/useNotifications';
+import { requestNotificationPermission, getNotifSettings, setNotifSetting } from '@/lib/useNotifications';
 
 function StrengthBar({ password }) {
   const score = [/.{8,}/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/]
@@ -58,6 +58,7 @@ export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme();
 
   const [notifPerm,   setNotifPerm]   = useState('default');
+  const [notifSettings, setNotifSettings] = useState({ enabled: true, atTime: true, before30: true, before60: true, morning: true });
   const [name,        setName]        = useState('');
   const [savingName,  setSavingName]  = useState(false);
   const [nameMsg,     setNameMsg]     = useState('');
@@ -73,8 +74,14 @@ export default function SettingsPage() {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setNotifPerm(Notification.permission);
     }
+    setNotifSettings(getNotifSettings());
     if (user) setName(user.user_metadata?.name || user.email?.split('@')[0] || '');
   }, [user]);
+
+  function handleNotifToggle(key, value) {
+    setNotifSetting(key, value);
+    setNotifSettings(getNotifSettings());
+  }
 
   async function handleRequestNotif() {
     const result = await requestNotificationPermission();
@@ -231,27 +238,89 @@ export default function SettingsPage() {
 
         {/* 알림 */}
         <Section title="알림" icon="fa-bell">
-          <Row
-            label="브라우저 알림"
-            sub="마감 시간 · 30분 전 · 1시간 전 알림"
-          >
+          <Row label="브라우저 알림 권한" sub="알림을 받으려면 브라우저 권한이 필요합니다">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: '0.8rem', fontWeight: 600, color: ns.color }}>
                 <i className={`fas ${ns.icon}`} style={{ marginRight: 4 }} />
                 {ns.label}
               </span>
               {notifPerm !== 'granted' && notifPerm !== 'denied' && (
-                <button className="btn-primary btn-sm" onClick={handleRequestNotif}>
-                  허용하기
-                </button>
+                <button className="btn-primary btn-sm" onClick={handleRequestNotif}>허용하기</button>
               )}
               {notifPerm === 'denied' && (
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-sub)' }}>
-                  브라우저 설정에서 해제
+                  브라우저 주소창 자물쇠 → 알림 허용
                 </span>
               )}
             </div>
           </Row>
+
+          {notifPerm === 'granted' && (
+            <>
+              <Row label="알림 전체 켜기/끄기" sub="모든 알림을 일괄 제어합니다">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <div
+                    onClick={() => handleNotifToggle('tc-notif-enabled', !notifSettings.enabled)}
+                    style={{
+                      width: 40, height: 22, borderRadius: 11, cursor: 'pointer',
+                      background: notifSettings.enabled ? 'var(--indigo-600)' : 'var(--border)',
+                      position: 'relative', transition: 'background .2s', flexShrink: 0,
+                    }}
+                  >
+                    <div style={{
+                      position: 'absolute', top: 3, left: notifSettings.enabled ? 21 : 3,
+                      width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                      transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)',
+                    }} />
+                  </div>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text)', fontWeight: 600 }}>
+                    {notifSettings.enabled ? 'ON' : 'OFF'}
+                  </span>
+                </label>
+              </Row>
+
+              {notifSettings.enabled && (
+                <div style={{ paddingLeft: 12, borderLeft: '2px solid var(--border)', marginTop: 4 }}>
+                  {[
+                    { key: 'tc-notif-at',      stateKey: 'atTime',   label: '마감 시간 알림',   sub: '정시에 알림' },
+                    { key: 'tc-notif-30m',     stateKey: 'before30', label: '30분 전 알림',     sub: '마감 30분 전' },
+                    { key: 'tc-notif-60m',     stateKey: 'before60', label: '1시간 전 알림',    sub: '마감 1시간 전' },
+                    { key: 'tc-notif-morning', stateKey: 'morning',  label: '오전 9시 알림',    sub: '오늘 할일 · 오늘 마감일 알림' },
+                  ].map(({ key, stateKey, label, sub }) => (
+                    <Row key={key} label={label} sub={sub}>
+                      <div
+                        onClick={() => handleNotifToggle(key, !notifSettings[stateKey])}
+                        style={{
+                          width: 36, height: 20, borderRadius: 10, cursor: 'pointer',
+                          background: notifSettings[stateKey] ? 'var(--indigo-600)' : 'var(--border)',
+                          position: 'relative', transition: 'background .2s',
+                        }}
+                      >
+                        <div style={{
+                          position: 'absolute', top: 2, left: notifSettings[stateKey] ? 18 : 2,
+                          width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                          transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)',
+                        }} />
+                      </div>
+                    </Row>
+                  ))}
+                  <div style={{ padding: '10px 0 4px' }}>
+                    <button
+                      className="btn-secondary btn-sm"
+                      onClick={() => {
+                        if (Notification.permission === 'granted') {
+                          new Notification('📋 테스트 알림', { body: 'TeamCalendar 알림이 정상 작동합니다!', icon: '/favicon.ico' });
+                        }
+                      }}
+                    >
+                      <i className="fas fa-paper-plane" style={{ marginRight: 6 }} />
+                      테스트 알림 보내기
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </Section>
 
         {/* 데이터 내보내기 */}

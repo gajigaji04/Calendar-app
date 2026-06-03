@@ -200,8 +200,7 @@ export default function ChatWidget() {
     <>
       {/* ── 패널 ── */}
       {open && (
-        <div style={{
-          position: 'fixed', bottom: 78, right: 20, zIndex: 1000,
+        <div className="fab-chat-panel" style={{
           width: 360, height: 500,
           borderRadius: 16, border: '1px solid var(--border)',
           boxShadow: '0 12px 48px rgba(0,0,0,0.22)',
@@ -518,9 +517,8 @@ export default function ChatWidget() {
       <button
         onClick={() => setOpen(p => !p)}
         title="채팅"
-        className={`widget-fab${open ? ' active' : ''}`}
+        className={`widget-fab fab-chat-btn${open ? ' active' : ''}`}
         style={{
-          position: 'fixed', bottom: 20, right: 20, zIndex: 1001,
           width: 50, height: 50, borderRadius: '50%',
           boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
           cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',

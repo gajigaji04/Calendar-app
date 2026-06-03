@@ -2,10 +2,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
-import { getTeam, getTeamMembers, removeMember, leaveTeam, regenerateInviteCode } from '@/models/teamModel';
+import { getTeam, getTeamMembers, removeMember, leaveTeam, regenerateInviteCode, transferOwnership } from '@/models/teamModel';
 import { getTasksByUserIds } from '@/models/taskModel';
 import { getTeamTasks, createTeamTask, toggleTeamTask, deleteTeamTask } from '@/models/teamTaskModel';
 import TaskModal from '@/components/task/TaskModal';
+import KO_HOLIDAYS from '@/lib/koHolidays';
 
 const DAYS   = ['일','월','화','수','목','금','토'];
 const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
@@ -223,6 +224,9 @@ export default function TeamCalendarPage() {
   const [tab,           setTab]           = useState('calendar');
   const [copied,        setCopied]        = useState(false);
   const [filterMembers, setFilterMembers] = useState(new Set());
+  const [transferTarget,  setTransferTarget]  = useState(null);
+  const [transferring,    setTransferring]    = useState(false);
+  const [transferError,   setTransferError]   = useState('');
 
   const todayStr = toDateStr(now);
 
@@ -309,6 +313,28 @@ export default function TeamCalendarPage() {
     if (!confirm('팀을 탈퇴하시겠습니까?')) return;
     await leaveTeam(teamId, user.id);
     router.push('/teams');
+  }
+
+  async function handleTransfer() {
+    if (!transferTarget || transferring) return;
+    setTransferring(true);
+    setTransferError('');
+    try {
+      const newOwnerId = transferTarget.user_id;
+      await transferOwnership(teamId, newOwnerId, user.id);
+      // 성공: 로컬 state 즉시 반영
+      setTeam(prev => ({ ...prev, owner_id: newOwnerId }));
+      setMembers(prev => prev.map(m => {
+        if (m.user_id === newOwnerId) return { ...m, role: 'owner' };
+        if (m.user_id === user.id)   return { ...m, role: 'member' };
+        return m;
+      }));
+      setTransferTarget(null);
+    } catch (err) {
+      setTransferError(err.message || '오류가 발생했습니다.');
+    } finally {
+      setTransferring(false);
+    }
   }
 
   function toggleFilter(uid) {
@@ -698,6 +724,77 @@ export default function TeamCalendarPage() {
         </div>
       )}
 
+      {/* ─── 팀장 위탁 확인 모달 ─── */}
+      {transferTarget && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setTransferTarget(null)}>
+          <div className="modal-card" style={{ maxWidth: 400 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <i className="fas fa-crown" style={{ color: 'var(--indigo-600)' }} />
+                팀장 권한 위탁
+              </h3>
+              <button className="icon-btn" onClick={() => setTransferTarget(null)}>
+                <i className="fas fa-times" />
+              </button>
+            </div>
+
+            <div style={{
+              padding: '14px 16px', borderRadius: 12, marginBottom: 16,
+              background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                  background: MEMBER_COLORS[members.findIndex(m => m.user_id === transferTarget.user_id) % MEMBER_COLORS.length],
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontWeight: 700, fontSize: '0.9rem',
+                }}>
+                  {(transferTarget.display_name || transferTarget.email)?.[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>
+                    {transferTarget.display_name || transferTarget.email?.split('@')[0]}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)' }}>{transferTarget.email}</div>
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-sub)', lineHeight: 1.6, marginBottom: 20 }}>
+              위 멤버에게 팀장 권한을 위탁합니다.<br />
+              위탁 후 나는 <strong style={{ color: 'var(--text)' }}>일반 멤버</strong>로 변경됩니다.
+            </p>
+
+            <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: transferError ? 12 : 20, background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', fontSize: '0.8rem', color: 'var(--red-500)', display: 'flex', gap: 8 }}>
+              <i className="fas fa-triangle-exclamation" style={{ flexShrink: 0, marginTop: 1 }} />
+              이 작업은 즉시 적용되며 되돌리기 위해서는 새 팀장의 동의가 필요합니다.
+            </div>
+
+            {transferError && (
+              <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 16, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', fontSize: '0.82rem', color: 'var(--red-500)', display: 'flex', gap: 8 }}>
+                <i className="fas fa-circle-exclamation" style={{ flexShrink: 0, marginTop: 1 }} />
+                {transferError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn-secondary" onClick={() => { setTransferTarget(null); setTransferError(''); }} disabled={transferring}>취소</button>
+              <button
+                className="btn-primary"
+                onClick={handleTransfer}
+                disabled={transferring}
+                style={{ background: 'var(--indigo-600)', opacity: transferring ? 0.7 : 1 }}
+              >
+                {transferring
+                  ? <><i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />처리 중...</>
+                  : <><i className="fas fa-crown" style={{ marginRight: 6 }} />위탁 확정</>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── 리포트 탭 ─── */}
       {tab === 'report' && (
         <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -767,9 +864,19 @@ export default function TeamCalendarPage() {
                     {m.role === 'owner' ? '팀장' : '멤버'}
                   </span>
                   {isOwner && m.user_id !== user.id && (
-                    <button className="icon-btn" style={{ color: 'var(--red-500)' }} onClick={() => handleRemove(m)} title="내보내기">
-                      <i className="fas fa-user-minus" />
-                    </button>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button
+                        className="icon-btn"
+                        onClick={() => setTransferTarget(m)}
+                        title="팀장 권한 위탁"
+                        style={{ color: 'var(--indigo-600)' }}
+                      >
+                        <i className="fas fa-crown" />
+                      </button>
+                      <button className="icon-btn" style={{ color: 'var(--red-500)' }} onClick={() => handleRemove(m)} title="내보내기">
+                        <i className="fas fa-user-minus" />
+                      </button>
+                    </div>
                   )}
                 </div>
               );
@@ -1362,23 +1469,3 @@ function PlannerTab({ teamId, members, user }) {
     </div>
   );
 }
-
-const KO_HOLIDAYS = {
-  '2024-01-01':'신정','2024-02-09':'설날 전날','2024-02-10':'설날','2024-02-11':'설날','2024-02-12':'대체공휴일',
-  '2024-03-01':'삼일절','2024-05-05':'어린이날','2024-05-06':'대체공휴일','2024-05-15':'부처님오신날',
-  '2024-06-06':'현충일','2024-08-15':'광복절',
-  '2024-09-16':'추석 전날','2024-09-17':'추석','2024-09-18':'추석',
-  '2024-10-03':'개천절','2024-10-09':'한글날','2024-12-25':'성탄절',
-  '2025-01-01':'신정','2025-01-28':'설날 전날','2025-01-29':'설날','2025-01-30':'설날','2025-02-03':'대체공휴일',
-  '2025-03-01':'삼일절','2025-03-03':'대체공휴일',
-  '2025-05-05':'어린이날·부처님오신날','2025-05-06':'대체공휴일',
-  '2025-06-06':'현충일','2025-08-15':'광복절',
-  '2025-10-03':'개천절','2025-10-05':'추석 전날','2025-10-06':'추석','2025-10-07':'추석',
-  '2025-10-08':'대체공휴일','2025-10-09':'한글날','2025-12-25':'성탄절',
-  '2026-01-01':'신정','2026-02-16':'설날 전날','2026-02-17':'설날','2026-02-18':'설날',
-  '2026-03-01':'삼일절','2026-03-02':'대체공휴일',
-  '2026-05-05':'어린이날','2026-05-24':'부처님오신날',
-  '2026-06-06':'현충일','2026-08-15':'광복절',
-  '2026-09-24':'추석 전날','2026-09-25':'추석','2026-09-26':'추석',
-  '2026-10-03':'개천절','2026-10-09':'한글날','2026-12-25':'성탄절',
-};

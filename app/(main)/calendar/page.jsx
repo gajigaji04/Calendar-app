@@ -3,33 +3,14 @@ import { Suspense } from 'react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
-import { getTasksByDateRange, getTasksByDate, toggleComplete, updateTask } from '@/models/taskModel';
+import { getTasksByDateRange, getTasksByDate, getTasksByDeadline, toggleComplete, updateTask } from '@/models/taskModel';
 import TaskModal from '@/components/task/TaskModal';
 import { downloadICS } from '@/lib/exportICS';
 import { useDeadlineAlerts } from '@/lib/useDeadlineAlerts';
+import KO_HOLIDAYS from '@/lib/koHolidays';
 
 const DAYS   = ['일','월','화','수','목','금','토'];
 const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-
-const KO_HOLIDAYS = {
-  '2024-01-01':'신정','2024-02-09':'설날 전날','2024-02-10':'설날','2024-02-11':'설날','2024-02-12':'대체공휴일',
-  '2024-03-01':'삼일절','2024-05-05':'어린이날','2024-05-06':'대체공휴일','2024-05-15':'부처님오신날',
-  '2024-06-06':'현충일','2024-08-15':'광복절',
-  '2024-09-16':'추석 전날','2024-09-17':'추석','2024-09-18':'추석',
-  '2024-10-03':'개천절','2024-10-09':'한글날','2024-12-25':'성탄절',
-  '2025-01-01':'신정','2025-01-28':'설날 전날','2025-01-29':'설날','2025-01-30':'설날','2025-02-03':'대체공휴일',
-  '2025-03-01':'삼일절','2025-03-03':'대체공휴일',
-  '2025-05-05':'어린이날·부처님오신날','2025-05-06':'대체공휴일',
-  '2025-06-06':'현충일','2025-08-15':'광복절',
-  '2025-10-03':'개천절','2025-10-05':'추석 전날','2025-10-06':'추석','2025-10-07':'추석',
-  '2025-10-08':'대체공휴일','2025-10-09':'한글날','2025-12-25':'성탄절',
-  '2026-01-01':'신정','2026-02-16':'설날 전날','2026-02-17':'설날','2026-02-18':'설날',
-  '2026-03-01':'삼일절','2026-03-02':'대체공휴일',
-  '2026-05-05':'어린이날','2026-05-24':'부처님오신날',
-  '2026-06-06':'현충일','2026-08-15':'광복절',
-  '2026-09-24':'추석 전날','2026-09-25':'추석','2026-09-26':'추석',
-  '2026-10-03':'개천절','2026-10-09':'한글날','2026-12-25':'성탄절',
-};
 
 function toDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -67,9 +48,10 @@ function CalendarPage() {
     d.setDate(d.getDate() - d.getDay());
     return d;
   });
-  const [tasks,    setTasks]    = useState([]);
-  const [dayPanel, setDayPanel] = useState(null);
-  const [dayTasks, setDayTasks] = useState([]);
+  const [tasks,         setTasks]         = useState([]);
+  const [dayPanel,      setDayPanel]      = useState(null);
+  const [dayTasks,      setDayTasks]      = useState([]);
+  const [deadlineTasks, setDeadlineTasks] = useState([]);
   const [modal,    setModal]    = useState(null);
 
   const todayStr = toDateStr(now);
@@ -101,8 +83,12 @@ function CalendarPage() {
   async function openDayPanel(dateStr) {
     setDayPanel(dateStr);
     if (!user) return;
-    const data = await getTasksByDate(user.id, dateStr);
-    setDayTasks(data);
+    const [scheduled, deadlined] = await Promise.all([
+      getTasksByDate(user.id, dateStr),
+      getTasksByDeadline(user.id, dateStr),
+    ]);
+    setDayTasks(scheduled);
+    setDeadlineTasks(deadlined);
   }
 
   async function handleToggle(id, cur) {
@@ -251,8 +237,14 @@ function CalendarPage() {
         </div>
       </div>
 
-      {/* 날짜 패널 */}
+      {/* 날짜 패널 — 데스크탑: 사이드, 모바일: 하단 오버레이 */}
       {dayPanel && (
+        <>
+          {/* 모바일 오버레이 배경 */}
+          <div
+            className="cal-panel-overlay"
+            onClick={() => setDayPanel(null)}
+          />
         <div className="card cal-day-panel" style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '16px 20px 20px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>{dayPanel}</span>
@@ -266,11 +258,13 @@ function CalendarPage() {
             </div>
           </div>
 
-          {dayTasks.length === 0 ? (
+          {dayTasks.length === 0 && deadlineTasks.length === 0 ? (
             <p style={{ color: 'var(--text-sub)', fontSize: '0.83rem', textAlign: 'center', padding: '16px 0' }}>
               할일이 없습니다
             </p>
-          ) : dayTasks.map(t => {
+          ) : null}
+
+          {dayTasks.map(t => {
             const dl = getDeadlineInfo(t);
             return (
               <div
@@ -315,7 +309,60 @@ function CalendarPage() {
               </div>
             );
           })}
+
+          {deadlineTasks.length > 0 && (
+            <>
+              <div style={{
+                fontSize: '0.72rem', fontWeight: 700, color: 'var(--red-500)',
+                padding: '4px 0 2px', borderTop: dayTasks.length > 0 ? '1px solid var(--border)' : 'none',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <i className="fas fa-flag" />
+                오늘 마감
+              </div>
+              {deadlineTasks.map(t => (
+                <div
+                  key={t.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(239,68,68,0.05)', cursor: 'pointer',
+                    borderLeft: `3px solid ${t.color || 'var(--red-500)'}`,
+                  }}
+                  onClick={() => setModal(t)}
+                >
+                  <button
+                    onClick={e => { e.stopPropagation(); handleToggle(t.id, t.completed); }}
+                    style={{
+                      width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                      border: `2px solid ${t.completed ? 'var(--indigo-600)' : 'var(--red-500)'}`,
+                      background: t.completed ? 'var(--indigo-600)' : 'transparent',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontSize: '0.6rem',
+                    }}
+                  >
+                    {t.completed && <i className="fas fa-check" />}
+                  </button>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: '0.83rem', color: 'var(--text)',
+                      textDecoration: t.completed ? 'line-through' : 'none',
+                      opacity: t.completed ? 0.5 : 1,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {t.title}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-sub)', marginTop: 2 }}>
+                      <i className="fas fa-calendar" style={{ marginRight: 3 }} />
+                      {t.date} 시작
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
+        </>
       )}
 
       {modal && (
@@ -327,8 +374,12 @@ function CalendarPage() {
             setModal(null);
             await loadTasks();
             if (dayPanel) {
-              const data = await getTasksByDate(user.id, dayPanel);
-              setDayTasks(data);
+              const [scheduled, deadlined] = await Promise.all([
+                getTasksByDate(user.id, dayPanel),
+                getTasksByDeadline(user.id, dayPanel),
+              ]);
+              setDayTasks(scheduled);
+              setDeadlineTasks(deadlined);
             }
           }}
         />
@@ -337,9 +388,71 @@ function CalendarPage() {
   );
 }
 
+/* ── 터치 드래그앤드롭 훅 ── */
+function useTouchDrag(onTaskMove) {
+  const dragging = useRef(null); // { id, date, el, ghost }
+
+  function onTouchStart(e, task) {
+    const touch = e.touches[0];
+    const el    = e.currentTarget;
+    const rect  = el.getBoundingClientRect();
+
+    // 고스트 엘리먼트 생성
+    const ghost = el.cloneNode(true);
+    ghost.style.cssText = `
+      position:fixed; pointer-events:none; z-index:9999; opacity:0.85;
+      width:${rect.width}px; left:${rect.left}px; top:${rect.top}px;
+      border-radius:4px; font-size:0.68rem; padding:2px 6px;
+      background:${el.style.background || 'var(--indigo-100)'};
+      box-shadow:0 4px 12px rgba(0,0,0,0.2);
+    `;
+    document.body.appendChild(ghost);
+    dragging.current = { id: task.id, date: task.date, ghost, startX: touch.clientX, startY: touch.clientY };
+    el.style.opacity = '0.3';
+    dragging.current.sourceEl = el;
+  }
+
+  function onTouchMove(e) {
+    if (!dragging.current) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const { ghost } = dragging.current;
+    ghost.style.left = touch.clientX - 40 + 'px';
+    ghost.style.top  = touch.clientY - 12 + 'px';
+
+    // 현재 터치 아래 셀 찾기
+    ghost.style.display = 'none';
+    const below = document.elementFromPoint(touch.clientX, touch.clientY);
+    ghost.style.display = '';
+    const cell = below?.closest('[data-date]');
+    document.querySelectorAll('[data-date]').forEach(c => c.classList.remove('touch-drag-over'));
+    if (cell) cell.classList.add('touch-drag-over');
+  }
+
+  function onTouchEnd(e) {
+    if (!dragging.current) return;
+    const { id, date, ghost, sourceEl } = dragging.current;
+    ghost.remove();
+    if (sourceEl) sourceEl.style.opacity = '';
+
+    const touch = e.changedTouches[0];
+    ghost.style.display = 'none';
+    const below = document.elementFromPoint(touch.clientX, touch.clientY);
+    document.querySelectorAll('[data-date]').forEach(c => c.classList.remove('touch-drag-over'));
+
+    const cell    = below?.closest('[data-date]');
+    const newDate = cell?.dataset.date;
+    if (newDate && newDate !== date) onTaskMove(id, newDate);
+    dragging.current = null;
+  }
+
+  return { onTouchStart, onTouchMove, onTouchEnd };
+}
+
 /* ── 월 뷰 ── */
 function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick, onTaskMove }) {
   const [dragOverDate, setDragOverDate] = useState(null);
+  const { onTouchStart, onTouchMove, onTouchEnd } = useTouchDrag(onTaskMove);
   const firstDay    = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const prevDays    = new Date(year, month, 0).getDate();
@@ -352,6 +465,17 @@ function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick, onTas
     if (spanIds.has(t.id)) return;
     if (!taskMap[t.date]) taskMap[t.date] = [];
     taskMap[t.date].push(t);
+  });
+
+  // 같은 날 같은 recurrence_id → 대표 1개만 표시 (중복 제거)
+  Object.keys(taskMap).forEach(ds => {
+    const seen = new Set();
+    taskMap[ds] = taskMap[ds].filter(t => {
+      if (!t.recurrence_id) return true;
+      if (seen.has(t.recurrence_id)) return false;
+      seen.add(t.recurrence_id);
+      return true;
+    });
   });
 
   const cells = [];
@@ -434,6 +558,7 @@ function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick, onTas
                 return (
                   <div
                     key={wi * 7 + ci}
+                    data-date={cell.ds ?? undefined}
                     className={[
                       'full-cell',
                       cell.other   ? 'other-month'  : '',
@@ -487,6 +612,9 @@ function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick, onTas
                               e.dataTransfer.effectAllowed = 'move';
                               e.dataTransfer.setData('text/plain', JSON.stringify({ id: t.id, date: t.date }));
                             }}
+                            onTouchStart={e => { e.stopPropagation(); onTouchStart(e, t); }}
+                            onTouchMove={e => { e.stopPropagation(); onTouchMove(e); }}
+                            onTouchEnd={e => { e.stopPropagation(); onTouchEnd(e); }}
                           >
                               {t.recurrence && t.recurrence !== 'none' && <i className="fas fa-repeat" style={{ fontSize: '0.6rem', marginRight: 3, opacity: 0.6 }} />}
                             {t.title}{dl && <> <span className={`cell-dl ${dl.cls}`}>{dl.label}</span></>}

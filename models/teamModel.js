@@ -77,6 +77,16 @@ export async function deleteTeam(teamId) {
   if (error) throw new Error(error.message);
 }
 
+export async function transferOwnership(teamId, newOwnerId, currentOwnerId) {
+  const res = await fetch('/api/teams/transfer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teamId, newOwnerId, currentUserId: currentOwnerId }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || '권한 위탁 실패');
+}
+
 export async function regenerateInviteCode(teamId) {
   const code = Array.from(
     crypto.getRandomValues(new Uint8Array(8)),

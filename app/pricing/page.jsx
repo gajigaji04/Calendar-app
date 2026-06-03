@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 const TEXT  = '#f0f0ff';
 const MUTED = 'rgba(255,255,255,0.45)';
@@ -122,11 +123,31 @@ function fmt(n) {
 }
 
 export default function PricingPage() {
-  const [yearly,  setYearly]  = useState(false);
-  const [openFaq, setOpenFaq] = useState(null);
+  const [yearly,   setYearly]   = useState(false);
+  const [openFaq,  setOpenFaq]  = useState(null);
+  const [loading,  setLoading]  = useState('');
+  const router = useRouter();
 
-  function handleBuy(plan) {
-    alert(`${plan.name} 플랜 결제 기능은 곧 오픈됩니다! 🚀`);
+  async function handleBuy(plan) {
+    if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
+      alert('결제 시스템을 준비 중입니다. 곧 오픈됩니다! 🚀');
+      return;
+    }
+    setLoading(plan.id);
+    try {
+      const res  = await fetch('/api/stripe/checkout', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ plan: plan.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      if (json.url) router.push(json.url);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setLoading('');
+    }
   }
 
   return (
@@ -220,7 +241,7 @@ export default function PricingPage() {
                     </div>
                   )}
                   <div style={{ background:'#0f0f20', borderRadius:'21px', padding:'32px 28px', height:'100%', display:'flex', flexDirection:'column' }}>
-                    <PlanBody plan={plan} price={price} yearly={yearly} dark onBuy={handleBuy} />
+                    <PlanBody plan={plan} price={price} yearly={yearly} dark onBuy={handleBuy} loading={loading} />
                   </div>
                 </div>
               );
@@ -232,7 +253,7 @@ export default function PricingPage() {
                       {plan.badge}
                     </div>
                   )}
-                  <PlanBody plan={plan} price={price} yearly={yearly} onBuy={handleBuy} />
+                  <PlanBody plan={plan} price={price} yearly={yearly} onBuy={handleBuy} loading={loading} />
                 </div>
               );
             })}
@@ -324,7 +345,7 @@ export default function PricingPage() {
   );
 }
 
-function PlanBody({ plan, price, yearly, dark = false, onBuy }) {
+function PlanBody({ plan, price, yearly, dark = false, onBuy, loading = '' }) {
   const t = dark ? '#f0f0ff' : TEXT;
   const m = dark ? 'rgba(255,255,255,0.5)' : MUTED;
   const d = dark ? 'rgba(255,255,255,0.25)' : DIM;
@@ -365,14 +386,14 @@ function PlanBody({ plan, price, yearly, dark = false, onBuy }) {
       ) : (
         <button
           onClick={() => onBuy(plan)}
-          style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', padding:'12px', borderRadius:'12px', fontWeight:700, fontSize:'14px', cursor:'pointer', fontFamily:'inherit',
+          disabled={!!loading}
+          style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', padding:'12px', borderRadius:'12px', fontWeight:700, fontSize:'14px', cursor: loading ? 'not-allowed' : 'pointer', fontFamily:'inherit', opacity: loading ? 0.7 : 1,
             background: dark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.07)',
             border: dark ? '1px solid rgba(255,255,255,0.25)' : `1px solid ${BORDER}`,
             color: t }}>
-          {plan.cta}
-          <span style={{ fontSize:'10px', background:'rgba(245,158,11,0.2)', color:'#fbbf24', padding:'2px 8px', borderRadius:'999px', fontWeight:800 }}>
-            곧 오픈
-          </span>
+          {loading === plan.id
+            ? <span style={{ width:14, height:14, border:'2px solid rgba(255,255,255,0.3)', borderTopColor:'#fff', borderRadius:'50%', display:'inline-block', animation:'spin-slow .7s linear infinite' }} />
+            : plan.cta}
         </button>
       )}
     </>

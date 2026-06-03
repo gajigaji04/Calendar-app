@@ -143,7 +143,7 @@ export default function DashboardPage() {
       <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
         {/* ── 통계 카드 4개 ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+        <div className="dash-stat-grid">
           <StatCard icon="fas fa-list-check"     bg="var(--indigo-50)"  color="var(--indigo-600)" num={todayTasks.length} label="오늘 할일" />
           <StatCard icon="fas fa-circle-check"   bg="var(--green-lt)"   color="var(--green)"      num={done}             label="완료" />
           <StatCard icon="fas fa-hourglass-half" bg="var(--amber-lt)"   color="var(--amber)"      num={pending}          label="미완료" />
@@ -171,7 +171,7 @@ export default function DashboardPage() {
         <ProductivityMonitor weekTasks={weekTasks} streakDays={streakDays} todayStr={todayStr} />
 
         {/* ── 메인 그리드 ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 16, alignItems: 'start' }}>
+        <div className="dash-main-grid">
 
           {/* ── 오늘 할일 ── */}
           <div className="card">

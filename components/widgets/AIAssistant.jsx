@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/AuthContext';
-import { getTasksByDateRange, getTasksByUserIds } from '@/models/taskModel';
+import { getTasksByDateRange, getTasksByUserIds, getActiveTasks } from '@/models/taskModel';
 import { getUserTeams, getTeamMembers } from '@/models/teamModel';
 
 const SUGGESTIONS = [
@@ -50,8 +50,8 @@ export default function AIAssistant() {
       const end14 = new Date(); end14.setDate(end14.getDate() + 14);
       const end14Str = end14.toISOString().split('T')[0];
 
-      // 내 일정 (오늘 ~ 14일)
-      const myTasks    = await getTasksByDateRange(user.id, today, end14Str);
+      // 내 일정 (미완료만, 경량 쿼리)
+      const myTasks    = await getActiveTasks(user.id);
       const todayMine  = myTasks.filter(t => !t.completed && t.date === today);
       const upcoming   = myTasks.filter(t => !t.completed && t.date > today);
 
@@ -166,8 +166,7 @@ export default function AIAssistant() {
     <>
       {/* 패널 */}
       {open && (
-        <div style={{
-          position: 'fixed', bottom: 76, right: 78, zIndex: 1000,
+        <div className="fab-ai-panel" style={{
           width: 340, height: 480,
           background: 'var(--card)', border: '1px solid var(--border)',
           borderRadius: 16, boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
@@ -313,9 +312,8 @@ export default function AIAssistant() {
       <button
         onClick={() => setOpen(p => !p)}
         title="AI 비서"
-        className={`widget-fab${open ? ' active' : ''}`}
+        className={`widget-fab fab-ai-btn${open ? ' active' : ''}`}
         style={{
-          position: 'fixed', bottom: 20, right: 78, zIndex: 1001,
           width: 50, height: 50, borderRadius: '50%',
           boxShadow: '0 4px 16px rgba(99,102,241,0.3)',
           cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',

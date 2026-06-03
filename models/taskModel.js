@@ -29,11 +29,31 @@ export async function getTasksByUser(userId) {
   return data ?? [];
 }
 
+/** 미완료 태스크만 — 동기화/AI context용 경량 쿼리 */
+export async function getActiveTasks(userId) {
+  const { data } = await getSupabase().from('tasks')
+    .select('id, title, date, deadline, priority, completed, due_time, color, recurrence, google_event_id, notion_page_id')
+    .eq('user_id', userId)
+    .eq('completed', false)
+    .order('date', { ascending: true });
+  return data ?? [];
+}
+
 export async function getTasksByDate(userId, date) {
   const { data } = await getSupabase().from('tasks')
     .select('*')
     .eq('user_id', userId)
     .eq('date', date)
+    .order('created_at');
+  return data ?? [];
+}
+
+export async function getTasksByDeadline(userId, date) {
+  const { data } = await getSupabase().from('tasks')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('deadline', date)
+    .neq('date', date)
     .order('created_at');
   return data ?? [];
 }

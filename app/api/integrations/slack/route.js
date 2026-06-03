@@ -2,44 +2,16 @@ export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { getServerUser, getServiceSupabase } from '@/lib/supabaseServer';
-import { testWebhook, sendMessage, buildDailySummary, buildDueSoonAlert } from '@/lib/integrations/slack';
+import { sendMessage, buildDailySummary, buildDueSoonAlert } from '@/lib/integrations/slack';
 import { getTasksByUser } from '@/models/taskModel';
-
-/** POST — Webhook URL 저장 + 테스트 */
-export async function POST(request) {
-  const user = await getServerUser();
-  if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
-
-  const { webhookUrl, notify = {} } = await request.json().catch(() => ({}));
-  if (!webhookUrl || !webhookUrl.startsWith('https://hooks.slack.com/')) {
-    return NextResponse.json({ error: '유효한 Slack Webhook URL을 입력하세요.' }, { status: 400 });
-  }
-
-  // 연결 테스트
-  try {
-    await testWebhook(webhookUrl);
-  } catch (e) {
-    return NextResponse.json({ error: `Webhook 테스트 실패: ${e.message}` }, { status: 400 });
-  }
-
-  const sb = getServiceSupabase();
-  const { error } = await sb.from('integrations').upsert({
-    user_id:      user.id,
-    service:      'slack',
-    access_token: webhookUrl,
-    settings:     { webhookUrl, notify },
-    connected_at: new Date().toISOString(),
-  }, { onConflict: 'user_id,service' });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json({ ok: true });
-}
+import { getUserPlan, planAllows, planGateResponse } from '@/lib/planCheck';
 
 /** PATCH — 알림 옵션만 업데이트 */
 export async function PATCH(request) {
   const user = await getServerUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
+  const plan = await getUserPlan(user.id);
+  if (!planAllows(plan, 'pro')) return planGateResponse();
 
   const { notify } = await request.json().catch(() => ({}));
   const sb = getServiceSupabase();
