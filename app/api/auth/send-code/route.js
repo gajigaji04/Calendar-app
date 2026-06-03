@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { sendVerificationEmail } from '@/lib/mailer';
+import { rateLimit } from '@/lib/rateLimit';
+import { notifyServerError } from '@/lib/slackNotify';
 import crypto from 'crypto';
 
 function getAdmin() {
@@ -25,6 +27,9 @@ function smtpConfigured() {
 }
 
 export async function POST(req) {
+  const limited = rateLimit(req);
+  if (limited) return limited;
+
   // ── 설정 점검 ──────────────────────────────────────────────
   if (!process.env.SUPABASE_SERVICE_KEY) {
     console.error('[send-code] SUPABASE_SERVICE_KEY 환경변수가 없습니다.');
@@ -107,6 +112,7 @@ export async function POST(req) {
     return NextResponse.json({ ok: true, devMode: !smtpConfigured() });
   } catch (err) {
     console.error('[send-code] 오류:', err);
+    await notifyServerError({ path: '/api/auth/send-code', message: err.message, stack: err.stack });
     return NextResponse.json({ error: `코드 전송 실패: ${err.message || '알 수 없는 오류'}` }, { status: 500 });
   }
 }

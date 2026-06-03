@@ -1,10 +1,13 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rateLimit';
 import { getServerUser, getServiceSupabase } from '@/lib/supabaseServer';
 
 /** GET — 유저가 연동한 Notion 워크스페이스에서 접근 가능한 데이터베이스 목록 */
-export async function GET() {
+export async function GET(request) {
+  const limited = rateLimit(request);
+  if (limited) return limited;
   const user = await getServerUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 

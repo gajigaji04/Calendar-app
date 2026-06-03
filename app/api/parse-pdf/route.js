@@ -8,8 +8,11 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rateLimit';
 
 export async function POST(request) {
+  const limited = rateLimit(request);
+  if (limited) return limited;
   try {
     const formData = await request.formData();
     const file     = formData.get('file');

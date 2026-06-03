@@ -1,0 +1,6 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "javascript.preferences.importModuleSpecifier": "non-relative",
+  "js/ts.implicitProjectConfig.checkJs": false
+}

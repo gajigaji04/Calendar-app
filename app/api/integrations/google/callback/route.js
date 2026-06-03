@@ -1,10 +1,13 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rateLimit';
 import { getServiceSupabase } from '@/lib/supabaseServer';
 import { decodeState, exchangeCode } from '@/lib/integrations/googleCalendar';
 
 export async function GET(request) {
+  const limited = rateLimit(request);
+  if (limited) return limited;
   const { searchParams, origin } = new URL(request.url);
   const code  = searchParams.get('code');
   const state = searchParams.get('state');

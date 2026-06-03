@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rateLimit';
 import { getServerUser, getServiceSupabase } from '@/lib/supabaseServer';
 import { sendMessage, buildDailySummary, buildDueSoonAlert } from '@/lib/integrations/slack';
 import { getTasksByUser } from '@/models/taskModel';
@@ -8,6 +9,8 @@ import { getUserPlan, planAllows, planGateResponse } from '@/lib/planCheck';
 
 /** PATCH — 알림 옵션만 업데이트 */
 export async function PATCH(request) {
+  const limited = rateLimit(request);
+  if (limited) return limited;
   const user = await getServerUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
   const plan = await getUserPlan(user.id);
@@ -31,7 +34,9 @@ export async function PATCH(request) {
 }
 
 /** DELETE — 연결 해제 */
-export async function DELETE() {
+export async function DELETE(request) {
+  const limited = rateLimit(request);
+  if (limited) return limited;
   const user = await getServerUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
@@ -46,6 +51,8 @@ export async function DELETE() {
 
 /** POST /api/integrations/slack/send — 수동 알림 전송 */
 export async function PUT(request) {
+  const limited = rateLimit(request);
+  if (limited) return limited;
   const user = await getServerUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 

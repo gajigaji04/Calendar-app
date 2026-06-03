@@ -1,10 +1,9 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rateLimit';
 import Stripe from 'stripe';
 import { getServerUser } from '@/lib/supabaseServer';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', { apiVersion: '2024-11-20' });
 
 const PRICE_MAP = {
   pro:  process.env.STRIPE_PRICE_PRO,
@@ -17,9 +16,14 @@ const PRICE_MAP = {
  * → Stripe Checkout 세션 URL 반환
  */
 export async function POST(request) {
-  if (!process.env.STRIPE_SECRET_KEY) {
+  const limited = rateLimit(request);
+  if (limited) return limited;
+
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeKey) {
     return NextResponse.json({ error: 'Stripe가 설정되지 않았습니다.' }, { status: 503 });
   }
+  const stripe = new Stripe(stripeKey, { apiVersion: '2024-11-20' });
 
   const user = await getServerUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });

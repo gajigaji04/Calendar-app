@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rateLimit';
+import { notifyServerError } from '@/lib/slackNotify';
 import crypto from 'crypto';
 
 function getAdmin() {
@@ -16,6 +18,8 @@ function hashCode(code, email) {
 }
 
 export async function POST(req) {
+  const limited = rateLimit(req);
+  if (limited) return limited;
   try {
     const { email, code, password, name } = await req.json();
 
@@ -80,6 +84,7 @@ export async function POST(req) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[verify-code]', err);
+    await notifyServerError({ path: '/api/auth/verify-code', message: err.message, stack: err.stack });
     return NextResponse.json({ error: '인증 처리 중 오류가 발생했습니다.' }, { status: 500 });
   }
 }

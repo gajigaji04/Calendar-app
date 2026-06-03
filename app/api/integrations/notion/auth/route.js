@@ -1,12 +1,15 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rateLimit';
 import { getServerUser } from '@/lib/supabaseServer';
 import { getUserPlan, planAllows, planGateResponse } from '@/lib/planCheck';
 
 const NOTION_AUTH_URL = 'https://api.notion.com/v1/oauth/authorize';
 
-export async function GET() {
+export async function GET(request) {
+  const limited = rateLimit(request);
+  if (limited) return limited;
   const user = await getServerUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 

@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rateLimit';
 import { getServerUser, getServiceSupabase } from '@/lib/supabaseServer';
 import {
   getEvents, eventToTask, createEvent,
@@ -33,6 +34,8 @@ async function ensureFreshToken(row, sb) {
  * export: 선택한 태스크 → Google Calendar
  */
 export async function POST(request) {
+  const limited = rateLimit(request);
+  if (limited) return limited;
   const user = await getServerUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 
@@ -131,7 +134,9 @@ export async function POST(request) {
 }
 
 /** DELETE — 연결 해제 */
-export async function DELETE() {
+export async function DELETE(request) {
+  const limited = rateLimit(request);
+  if (limited) return limited;
   const user = await getServerUser();
   if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 });
 

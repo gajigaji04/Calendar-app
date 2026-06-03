@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rateLimit';
+import { notifyServerError } from '@/lib/slackNotify';
 
 function getAdmin() {
   return createClient(
@@ -10,6 +12,8 @@ function getAdmin() {
 }
 
 export async function POST(req) {
+  const limited = rateLimit(req);
+  if (limited) return limited;
   try {
     const { teamId, newOwnerId, currentUserId } = await req.json();
 
@@ -74,6 +78,7 @@ export async function POST(req) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[transfer-ownership]', err);
+    await notifyServerError({ path: '/api/teams/transfer', message: err.message, stack: err.stack });
     return NextResponse.json({ error: err.message || '권한 위탁 중 오류가 발생했습니다.' }, { status: 500 });
   }
 }
