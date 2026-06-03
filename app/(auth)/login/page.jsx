@@ -190,10 +190,12 @@ export default function LoginPage() {
   async function handleSocial(provider) {
     reset();
     setSocialLoading(provider);
-    const { error: err } = await getSupabase().auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
+    const options = { redirectTo: `${window.location.origin}/auth/callback` };
+    // 카카오: 이메일 권한(비즈니스 인증 필요)을 제외하고 프로필만 요청
+    if (provider === 'kakao') {
+      options.scopes = 'profile_nickname profile_image';
+    }
+    const { error: err } = await getSupabase().auth.signInWithOAuth({ provider, options });
     if (err) { setError(err.message); setSocialLoading(''); }
   }
 
