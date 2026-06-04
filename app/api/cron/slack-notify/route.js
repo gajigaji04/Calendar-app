@@ -20,7 +20,7 @@ function getServiceClient() {
 export async function GET(request) {
   // Vercel cron은 Authorization: Bearer <CRON_SECRET> 헤더를 붙여 호출
   const auth = request.headers.get('authorization');
-  if (process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -75,8 +75,7 @@ export async function GET(request) {
           .from('tasks')
           .select('*')
           .eq('user_id', row.user_id)
-          .eq('completed', false)
-          .not('deadline', 'is', null);
+          .eq('completed', false);
 
         const payload = buildDueSoonAlert(tasks ?? [], today);
         if (payload) await sendMessage(webhookUrl, payload);
