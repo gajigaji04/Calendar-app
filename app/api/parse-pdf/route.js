@@ -3,7 +3,7 @@
  * FormData: { file: File (PDF) }
  * Response: { text: string, pages: number }
  *
- * pdf-parse v2 는 Node.js 런타임이 필요합니다 (Edge 불가).
+ * pdf-parse v1 는 Node.js 런타임이 필요합니다 (Edge 불가).
  */
 export const runtime = 'nodejs';
 
@@ -28,17 +28,10 @@ export async function POST(request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer      = Buffer.from(arrayBuffer);
 
-    // pdf-parse v2: PDFParse 클래스 기반 API
-    const { PDFParse } = await import('pdf-parse');
-    const parser = new PDFParse({ data: buffer });
-    let result;
-    try {
-      result = await parser.getText({ pageJoiner: '\n' });
-    } finally {
-      await parser.destroy();
-    }
+    const pdfParse = (await import('pdf-parse')).default;
+    const result   = await pdfParse(buffer);
 
-    return NextResponse.json({ text: result.text, pages: result.total });
+    return NextResponse.json({ text: result.text, pages: result.numpages });
   } catch (err) {
     console.error('[parse-pdf]', err);
     return NextResponse.json(

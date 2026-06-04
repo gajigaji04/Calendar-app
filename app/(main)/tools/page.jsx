@@ -1,7 +1,6 @@
 'use client';
 import { useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/lib/AuthContext';
-import { analyzeText } from '@/lib/textAnalyzer';
 import { createTask } from '@/models/taskModel';
 
 // ─── 상수 ────────────────────────────────────────────────
@@ -206,21 +205,24 @@ export default function ToolsPage() {
   }, [handleFile]);
 
   // ── 분석 ──────────────────────────────────────────────
-  function handleAnalyze() {
+  async function handleAnalyze() {
     if (!text.trim()) return;
     setPhase('analyzing');
     setErrMsg('');
-    // 약간의 지연으로 UX
-    setTimeout(() => {
-      try {
-        const { items: found } = analyzeText(text, mode, today);
-        setItems(found);
-        setPhase('idle');
-      } catch (e) {
-        setErrMsg(e.message);
-        setPhase('error');
-      }
-    }, 300);
+    try {
+      const res  = await fetch('/api/analyze-text', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ text, mode, today }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? '분석 실패');
+      setItems(json.items ?? []);
+      setPhase('idle');
+    } catch (e) {
+      setErrMsg(e.message);
+      setPhase('error');
+    }
   }
 
   function toggleItem(id) {

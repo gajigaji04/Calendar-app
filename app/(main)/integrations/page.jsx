@@ -51,8 +51,48 @@ function StatusDot({ connected }) {
   );
 }
 
+// ─── InfoTooltip ──────────────────────────────────────────
+function InfoTooltip({ content }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(p => !p)}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
+          color: open ? 'var(--indigo-400,#818cf8)' : 'var(--text-muted,#9ca3af)',
+          fontSize: '0.85rem', lineHeight: 1, display: 'flex', alignItems: 'center',
+        }}
+        aria-label="설명 보기"
+      >
+        <i className="fas fa-circle-info" />
+      </button>
+      {open && (
+        <>
+          <div
+            onClick={() => setOpen(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 9 }}
+          />
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 8px)', left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 10, width: 280,
+            background: 'var(--card,#1e1e2e)', border: '1px solid var(--border)',
+            borderRadius: 12, padding: '14px 16px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+            fontSize: '0.77rem', color: 'var(--text-sub)', lineHeight: 1.65,
+          }}>
+            {content}
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
+
 // ─── SectionHeader ────────────────────────────────────────
-function SectionHeader({ icon, label, color, connected, lastSync }) {
+function SectionHeader({ icon, label, color, connected, lastSync, info }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -65,7 +105,10 @@ function SectionHeader({ icon, label, color, connected, lastSync }) {
           <i className={`fas ${icon}`} style={{ color, fontSize: '1rem' }} />
         </div>
         <div>
-          <span style={{ fontWeight: 700, fontSize: '0.97rem', color: 'var(--text)' }}>{label}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontWeight: 700, fontSize: '0.97rem', color: 'var(--text)' }}>{label}</span>
+            {info && <InfoTooltip content={info} />}
+          </span>
           {lastSync && (
             <p style={{ fontSize: '0.7rem', color: 'var(--text-muted,#9ca3af)', margin: 0 }}>
               마지막 동기화: {formatDate(lastSync)}
@@ -115,35 +158,6 @@ function Banner({ type, message, onClose }) {
   );
 }
 
-// ─── 안내 토글 ────────────────────────────────────────────
-function GuideToggle({ children }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <button
-        type="button"
-        onClick={() => setOpen(p => !p)}
-        style={{
-          background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-          fontSize: '0.77rem', color: 'var(--indigo-400,#818cf8)', fontFamily: 'inherit',
-          display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600,
-        }}
-      >
-        <i className={`fas fa-chevron-${open ? 'up' : 'down'}`} style={{ fontSize: '0.65rem' }} />
-        발급 방법 보기
-      </button>
-      {open && (
-        <div style={{
-          marginTop: 8, padding: '12px 14px', borderRadius: 10,
-          background: 'var(--bg-sub,rgba(0,0,0,0.04))', border: '1px solid var(--border)',
-          fontSize: '0.78rem', color: 'var(--text-sub)', lineHeight: 1.7,
-        }}>
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ────────────────────────────────────────────────────────────
 // ① Google Calendar 카드
@@ -350,7 +364,30 @@ function NotionCard({ status, onRefresh }) {
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
-      <SectionHeader icon="fa-n" label="Notion" color="#e2e8f0" connected={connected} lastSync={lastSync} />
+      <SectionHeader
+        icon="fa-n" label="Notion" color="#e2e8f0"
+        connected={connected} lastSync={lastSync}
+        info={
+          <div>
+            <p style={{ fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>Notion 연동 안내</p>
+            <p style={{ marginBottom: 6 }}><strong>Notion → 앱 가져오기</strong><br />
+              Notion DB 페이지를 할 일로 가져옵니다. 이미 가져온 항목은 중복 추가되지 않습니다.
+            </p>
+            <p style={{ marginBottom: 8 }}><strong>앱 → Notion 내보내기</strong><br />
+              오늘 이후 미완료 할 일을 Notion DB에 추가합니다.
+            </p>
+            <p style={{ fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>Notion DB 필수 컬럼</p>
+            <ul style={{ margin: 0, paddingLeft: 16 }}>
+              <li><code>이름</code> — 제목(title) 타입</li>
+              <li><code>날짜</code> — 날짜(date) 타입</li>
+              <li><code>완료</code> — 체크박스 타입</li>
+              <li><code>우선순위</code> — 선택(select) 타입<br />
+                <span style={{ fontSize: '0.72rem' }}>옵션: 높음 / 보통 / 낮음</span>
+              </li>
+            </ul>
+          </div>
+        }
+      />
       <ResultBox />
 
       {!connected ? (

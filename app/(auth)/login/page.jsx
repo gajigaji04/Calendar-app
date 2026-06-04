@@ -37,13 +37,6 @@ function GoogleIcon() {
     </svg>
   );
 }
-function KakaoIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="#3C1E1E">
-      <path d="M12 3C6.48 3 2 6.69 2 11.25c0 2.88 1.8 5.41 4.5 6.87l-.87 3.24c-.07.26.2.48.44.35L10.22 19c.58.08 1.18.13 1.78.13 5.52 0 10-3.69 10-8.25S17.52 3 12 3z"/>
-    </svg>
-  );
-}
 function GitHubIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -54,7 +47,6 @@ function GitHubIcon() {
 
 const SOCIAL = [
   { id: 'google', label: 'Google로 계속하기', Icon: GoogleIcon, bg: 'rgba(255,255,255,0.07)', border: 'rgba(255,255,255,0.13)', color: '#f0f0ff', hoverBg: 'rgba(255,255,255,0.12)' },
-  { id: 'kakao',  label: '카카오로 계속하기', Icon: KakaoIcon,  bg: '#FEE500', border: '#FEE500', color: '#191600', hoverBg: '#F5DC00' },
   { id: 'github', label: 'GitHub로 계속하기', Icon: GitHubIcon, bg: 'rgba(255,255,255,0.07)', border: 'rgba(255,255,255,0.13)', color: '#f0f0ff', hoverBg: 'rgba(255,255,255,0.12)' },
 ];
 
@@ -191,10 +183,6 @@ export default function LoginPage() {
     reset();
     setSocialLoading(provider);
     const options = { redirectTo: `${window.location.origin}/auth/callback` };
-    // 카카오: 이메일 권한(비즈니스 인증 필요)을 제외하고 프로필만 요청
-    if (provider === 'kakao') {
-      options.scopes = 'profile_nickname profile_image';
-    }
     const { error: err } = await getSupabase().auth.signInWithOAuth({ provider, options });
     if (err) { setError(err.message); setSocialLoading(''); }
   }
