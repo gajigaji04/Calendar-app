@@ -22,8 +22,8 @@ function hashCode(code, email) {
   return crypto.createHmac('sha256', secret).update(code + email.toLowerCase()).digest('hex');
 }
 
-function smtpConfigured() {
-  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+function emailConfigured() {
+  return !!process.env.RESEND_API_KEY;
 }
 
 export async function POST(req) {
@@ -98,7 +98,7 @@ export async function POST(req) {
     if (insertError) throw insertError;
 
     // ── 이메일 전송 (SMTP 미설정 시 콘솔 출력으로 대체) ────
-    if (smtpConfigured()) {
+    if (emailConfigured()) {
       await sendVerificationEmail(email, name, code);
     } else {
       console.log(`\n========================================`);
@@ -109,7 +109,7 @@ export async function POST(req) {
       console.log(`========================================\n`);
     }
 
-    return NextResponse.json({ ok: true, devMode: !smtpConfigured() });
+    return NextResponse.json({ ok: true, devMode: !emailConfigured() });
   } catch (err) {
     console.error('[send-code] 오류:', err);
     await notifyServerError({ path: '/api/auth/send-code', message: err.message, stack: err.stack });

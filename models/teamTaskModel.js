@@ -45,6 +45,24 @@ export async function updateTeamTask(id, updates) {
   if (error) throw new Error(error.message);
 }
 
+/** 나에게 할당된 팀 태스크 (미완료 전체) */
+export async function getMyTeamAssignedTasks(userId) {
+  const { data } = await getSupabase()
+    .from('team_tasks')
+    .select('*, teams(id, name)')
+    .eq('assigned_to', userId)
+    .eq('completed', false)
+    .order('date')
+    .limit(20);
+  return (data ?? []).map(t => ({
+    ...t,
+    deadline:  t.date,
+    _teamId:   t.teams?.id,
+    _teamName: t.teams?.name,
+    _source:   'team',
+  }));
+}
+
 /** 마감 임박 팀 태스크 조회 (date를 마감일로 취급, RLS로 내 팀 것만 반환) */
 export async function getUpcomingTeamDeadlines(start, end) {
   const { data } = await getSupabase()

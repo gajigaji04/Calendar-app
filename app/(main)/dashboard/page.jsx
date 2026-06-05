@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import { getTasksByDate, getTasksByDateRange, createTask, toggleComplete } from '@/models/taskModel';
 import { useDeadlineAlerts } from '@/lib/useDeadlineAlerts';
+import { getMyTeamAssignedTasks } from '@/models/teamTaskModel';
 
 const DAYS   = ['일','월','화','수','목','금','토'];
 const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
@@ -35,6 +36,7 @@ export default function DashboardPage() {
   const [nowMs,       setNowMs]       = useState(() => Date.now());
   const [weekTasks,   setWeekTasks]   = useState([]);
   const [streakDays,  setStreakDays]  = useState(0);
+  const [assignedTeamTasks, setAssignedTeamTasks] = useState([]);
 
   const { overdue, dueToday, soon, refresh: refreshAlerts } = useDeadlineAlerts();
   const soonClose = soon.filter(t => {
@@ -45,6 +47,12 @@ export default function DashboardPage() {
     const diff = Math.round((new Date(t.deadline + 'T00:00:00') - new Date(todayStr + 'T00:00:00')) / 86400000);
     return diff > 3 && diff <= 7;
   });
+
+  const teamOverdue    = overdue.filter(t => t._source === 'team');
+  const teamToday      = dueToday.filter(t => t._source === 'team');
+  const teamSoonClose  = soonClose.filter(t => t._source === 'team');
+  const teamSoonWeek   = soonWeek.filter(t => t._source === 'team');
+  const teamUrgentCount = teamOverdue.length + teamToday.length;
 
   const loadToday = useCallback(async () => {
     if (!user) return;
@@ -93,6 +101,11 @@ export default function DashboardPage() {
     const end   = toDateStr(new Date(miniYear, miniMonth + 1, 0));
     getTasksByDateRange(user.id, start, end).then(setMiniTasks);
   }, [user, miniYear, miniMonth]);
+
+  useEffect(() => {
+    if (!user) return;
+    getMyTeamAssignedTasks(user.id).then(setAssignedTeamTasks).catch(() => {});
+  }, [user]);
 
   async function handleToggle(id, cur) {
     await toggleComplete(id, cur);
@@ -169,6 +182,68 @@ export default function DashboardPage() {
 
         {/* ── 생산성 모니터링 ── */}
         <ProductivityMonitor weekTasks={weekTasks} streakDays={streakDays} todayStr={todayStr} />
+
+        {/* ── 팀 일정 ── */}
+        <div className="dash-main-grid">
+          {/* 내 담당 팀 일정 */}
+          <div className="card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)' }}>
+                <i className="fas fa-user-check" style={{ marginRight: 8, color: 'var(--indigo-600)' }} />
+                내 담당 팀 일정
+              </h3>
+              {assignedTeamTasks.length > 0 && (
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, background: 'var(--indigo-50)', color: 'var(--indigo-600)', borderRadius: 999, padding: '2px 8px' }}>
+                  {assignedTeamTasks.length}건
+                </span>
+              )}
+            </div>
+            {assignedTeamTasks.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-sub)', fontSize: '0.83rem' }}>
+                <i className="fas fa-inbox" style={{ fontSize: '1.5rem', marginBottom: 6, display: 'block', opacity: 0.4 }} />
+                담당 팀 일정이 없어요
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {assignedTeamTasks.slice(0, 6).map(t => (
+                  <DeadlineItem key={t.id} task={t}
+                    iconColor={t.deadline < todayStr ? 'var(--red)' : t.deadline === todayStr ? 'var(--amber)' : 'var(--indigo-600)'}
+                    bgColor={t.deadline < todayStr ? 'var(--red-lt)' : t.deadline === todayStr ? 'var(--orange-lt)' : 'var(--indigo-50)'}
+                    todayStr={todayStr}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 촉박한 팀 일정 */}
+          <div className="card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)' }}>
+                <i className="fas fa-users-gear" style={{ marginRight: 8, color: '#d97706' }} />
+                촉박한 팀 일정
+              </h3>
+              {teamUrgentCount > 0 && (
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#fff', background: 'var(--red-500)', borderRadius: 999, padding: '2px 8px' }}>
+                  {teamUrgentCount}건 긴급
+                </span>
+              )}
+            </div>
+            {teamOverdue.length === 0 && teamToday.length === 0 && teamSoonClose.length === 0 && teamSoonWeek.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-sub)', fontSize: '0.83rem' }}>
+                <i className="fas fa-check-circle" style={{ fontSize: '1.5rem', marginBottom: 6, display: 'block', color: '#059669', opacity: 0.7 }} />
+                촉박한 팀 일정이 없어요
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <DeadlineGroup label="기한 초과" icon="fa-circle-exclamation" iconColor="var(--red)"       bgColor="var(--red-lt)"    tasks={teamOverdue}   todayStr={todayStr} />
+                <DeadlineGroup label="오늘 마감" icon="fa-circle-dot"         iconColor="var(--amber)"     bgColor="var(--orange-lt)" tasks={teamToday}     todayStr={todayStr} />
+                <DeadlineGroup label="3일 이내"  icon="fa-hourglass-half"     iconColor="var(--amber)"     bgColor="var(--amber-lt)"  tasks={teamSoonClose} todayStr={todayStr} />
+                <DeadlineGroup label="이번 주"   icon="fa-calendar-week"      iconColor="var(--indigo-600)" bgColor="var(--indigo-50)" tasks={teamSoonWeek}  todayStr={todayStr} />
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* ── 메인 그리드 ── */}
         <div className="dash-main-grid">
