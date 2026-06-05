@@ -1,9 +1,10 @@
 'use client';
 import { Suspense } from 'react';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import { getTasksByDateRange, getTasksByDate, getTasksByDeadline, toggleComplete, updateTask } from '@/models/taskModel';
+import { getTeamTasksByDateRange } from '@/models/teamTaskModel';
 import TaskModal from '@/components/task/TaskModal';
 import { downloadICS } from '@/lib/exportICS';
 import { useDeadlineAlerts } from '@/lib/useDeadlineAlerts';
@@ -35,6 +36,7 @@ export default function CalendarPageWrapper() {
 
 function CalendarPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const { refresh: refreshAlerts } = useDeadlineAlerts();
   const searchParams = useSearchParams();
   const now = new Date();
@@ -49,8 +51,10 @@ function CalendarPage() {
     return d;
   });
   const [tasks,         setTasks]         = useState([]);
+  const [teamTasks,     setTeamTasks]     = useState([]);
   const [dayPanel,      setDayPanel]      = useState(null);
   const [dayTasks,      setDayTasks]      = useState([]);
+  const [teamDayTasks,  setTeamDayTasks]  = useState([]);
   const [deadlineTasks, setDeadlineTasks] = useState([]);
   const [modal,    setModal]    = useState(null);
 
@@ -68,8 +72,12 @@ function CalendarPage() {
       start = toDateStr(new Date(year, month, 1));
       end   = toDateStr(new Date(year, month + 1, 0));
     }
-    const data = await getTasksByDateRange(user.id, start, end);
-    setTasks(data);
+    const [personalData, teamData] = await Promise.all([
+      getTasksByDateRange(user.id, start, end),
+      getTeamTasksByDateRange(start, end).catch(() => []),
+    ]);
+    setTasks(personalData);
+    setTeamTasks(teamData);
   }, [user, mode, year, month, weekStart]);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
@@ -83,12 +91,14 @@ function CalendarPage() {
   async function openDayPanel(dateStr) {
     setDayPanel(dateStr);
     if (!user) return;
-    const [scheduled, deadlined] = await Promise.all([
+    const [scheduled, deadlined, teamDay] = await Promise.all([
       getTasksByDate(user.id, dateStr),
       getTasksByDeadline(user.id, dateStr),
+      getTeamTasksByDateRange(dateStr, dateStr).catch(() => []),
     ]);
     setDayTasks(scheduled);
     setDeadlineTasks(deadlined);
+    setTeamDayTasks(teamDay);
   }
 
   async function handleToggle(id, cur) {
@@ -218,7 +228,7 @@ function CalendarPage() {
         <div className="card" style={{ flex: 1, padding: 0, overflow: 'auto', marginTop: 12 }}>
           {mode === 'month' && (
             <MonthView
-              year={year} month={month} tasks={tasks}
+              year={year} month={month} tasks={tasks} teamTasks={teamTasks}
               todayStr={todayStr} onDayClick={openDayPanel}
               onAddClick={ds => setModal({ _date: ds })}
               onTaskMove={handleTaskMove}
@@ -226,7 +236,7 @@ function CalendarPage() {
           )}
           {mode === 'week' && (
             <WeekView
-              weekStart={weekStart} tasks={tasks}
+              weekStart={weekStart} tasks={tasks} teamTasks={teamTasks}
               todayStr={todayStr} onDayClick={openDayPanel}
               onAddClick={ds => setModal({ _date: ds })}
             />
@@ -310,11 +320,54 @@ function CalendarPage() {
             );
           })}
 
+          {teamDayTasks.length > 0 && (
+            <>
+              <div style={{
+                fontSize: '0.72rem', fontWeight: 700, color: 'var(--indigo-600)',
+                padding: '4px 0 2px', borderTop: (dayTasks.length > 0 || deadlineTasks.length > 0) ? '1px solid var(--border)' : 'none',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                <i className="fas fa-users" />
+                팀 일정
+              </div>
+              {teamDayTasks.map(t => (
+                <div
+                  key={t.id}
+                  onClick={() => router.push(`/teams/${t._teamId}?tab=planner`)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(99,102,241,0.07)',
+                    borderLeft: '3px solid var(--indigo-500)',
+                    cursor: 'pointer', transition: 'opacity .12s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                >
+                  <i className="fas fa-users" style={{ color: 'var(--indigo-600)', fontSize: '0.72rem', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.83rem', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {t.title}
+                    </div>
+                    {t._teamName && (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--indigo-600)', marginTop: 1, opacity: 0.8 }}>
+                        {t._teamName}
+                      </div>
+                    )}
+                  </div>
+                  {t.priority === 'high' && (
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--red-500)', flexShrink: 0 }}>긴급</span>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
+
           {deadlineTasks.length > 0 && (
             <>
               <div style={{
                 fontSize: '0.72rem', fontWeight: 700, color: 'var(--red-500)',
-                padding: '4px 0 2px', borderTop: dayTasks.length > 0 ? '1px solid var(--border)' : 'none',
+                padding: '4px 0 2px', borderTop: (dayTasks.length > 0 || teamDayTasks.length > 0) ? '1px solid var(--border)' : 'none',
                 display: 'flex', alignItems: 'center', gap: 5,
               }}>
                 <i className="fas fa-flag" />
@@ -450,7 +503,7 @@ function useTouchDrag(onTaskMove) {
 }
 
 /* ── 월 뷰 ── */
-function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick, onTaskMove }) {
+function MonthView({ year, month, tasks, teamTasks = [], todayStr, onDayClick, onAddClick, onTaskMove }) {
   const [dragOverDate, setDragOverDate] = useState(null);
   const { onTouchStart, onTouchMove, onTouchEnd } = useTouchDrag(onTaskMove);
   const firstDay    = new Date(year, month, 1).getDay();
@@ -465,6 +518,12 @@ function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick, onTas
     if (spanIds.has(t.id)) return;
     if (!taskMap[t.date]) taskMap[t.date] = [];
     taskMap[t.date].push(t);
+  });
+
+  const teamTaskMap = {};
+  teamTasks.forEach(t => {
+    if (!teamTaskMap[t.date]) teamTaskMap[t.date] = [];
+    teamTaskMap[t.date].push(t);
   });
 
   // 같은 날 같은 recurrence_id → 대표 1개만 표시 (중복 제거)
@@ -548,8 +607,9 @@ function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick, onTas
             {/* 날짜 셀 */}
             <div className="full-grid">
               {week.map((cell, ci) => {
-                const cellTasks    = cell.ds ? (taskMap[cell.ds] || []) : [];
-                const isToday      = cell.ds === todayStr;
+                const cellTasks     = cell.ds ? (taskMap[cell.ds] || []) : [];
+                const cellTeamTasks = cell.ds ? (teamTaskMap[cell.ds] || []) : [];
+                const isToday       = cell.ds === todayStr;
                 const holiday      = cell.ds ? KO_HOLIDAYS[cell.ds] : null;
                 const isSun        = ci === 0;
                 const isSat        = ci === 6;
@@ -616,13 +676,31 @@ function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick, onTas
                             onTouchMove={e => { e.stopPropagation(); onTouchMove(e); }}
                             onTouchEnd={e => { e.stopPropagation(); onTouchEnd(e); }}
                           >
-                              {t.recurrence && t.recurrence !== 'none' && <i className="fas fa-repeat" style={{ fontSize: '0.6rem', marginRight: 3, opacity: 0.6 }} />}
+                            {t.recurrence && t.recurrence !== 'none' && <i className="fas fa-repeat" style={{ fontSize: '0.6rem', marginRight: 3, opacity: 0.6 }} />}
                             {t.title}{dl && <> <span className={`cell-dl ${dl.cls}`}>{dl.label}</span></>}
                           </div>
                         );
                       })}
-                      {cellTasks.length > 2 && (
-                        <div className="more-label">+{cellTasks.length - 2}</div>
+                      {cellTeamTasks.slice(0, 1).map(t => (
+                        <div
+                          key={`team-${t.id}`}
+                          className="cell-task"
+                          style={{
+                            borderLeft: '3px solid var(--indigo-500)',
+                            background: 'rgba(99,102,241,0.10)',
+                            color: 'var(--indigo-700,#4338ca)',
+                            fontStyle: 'italic',
+                          }}
+                          title={`[${t._teamName ?? '팀'}] ${t.title}`}
+                        >
+                          <i className="fas fa-users" style={{ fontSize: '0.55rem', marginRight: 3, opacity: 0.7 }} />
+                          {t.title}
+                        </div>
+                      ))}
+                      {(cellTasks.length > 2 || cellTeamTasks.length > 1) && (
+                        <div className="more-label">
+                          +{Math.max(0, cellTasks.length - 2) + Math.max(0, cellTeamTasks.length - 1)}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -637,7 +715,7 @@ function MonthView({ year, month, tasks, todayStr, onDayClick, onAddClick, onTas
 }
 
 /* ── 주 뷰 ── */
-function WeekView({ weekStart, tasks, todayStr, onDayClick, onAddClick }) {
+function WeekView({ weekStart, tasks, teamTasks = [], todayStr, onDayClick, onAddClick }) {
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart); d.setDate(d.getDate() + i);
     return { d, ds: toDateStr(d) };
@@ -655,6 +733,12 @@ function WeekView({ weekStart, tasks, todayStr, onDayClick, onAddClick }) {
     if (spanIds.has(t.id)) return;
     if (!taskMap[t.date]) taskMap[t.date] = [];
     taskMap[t.date].push(t);
+  });
+
+  const teamTaskMap = {};
+  teamTasks.forEach(t => {
+    if (!teamTaskMap[t.date]) teamTaskMap[t.date] = [];
+    teamTaskMap[t.date].push(t);
   });
 
   const spanBarH = spanTasks.length > 0 ? spanTasks.length * 20 + 6 : 0;
@@ -701,6 +785,7 @@ function WeekView({ weekStart, tasks, todayStr, onDayClick, onAddClick }) {
         {weekDays.map(({ d, ds }) => {
           const isToday      = ds === todayStr;
           const dayTasks     = taskMap[ds] || [];
+          const dayTeamTasks = teamTaskMap[ds] || [];
           const holiday      = KO_HOLIDAYS[ds];
           const isHolidayDay = holiday || d.getDay() === 0;
           return (
@@ -718,6 +803,22 @@ function WeekView({ weekStart, tasks, todayStr, onDayClick, onAddClick }) {
                     style={t.color ? { borderLeft: `3px solid ${t.color}` } : undefined}
                   >
                     {t.recurrence && t.recurrence !== 'none' && <i className="fas fa-repeat" style={{ fontSize: '0.6rem', marginRight: 3, opacity: 0.6 }} />}
+                    <span className="week-task-title">{t.title}</span>
+                  </div>
+                ))}
+                {dayTeamTasks.map(t => (
+                  <div
+                    key={`team-${t.id}`}
+                    className="week-task"
+                    style={{
+                      borderLeft: '3px solid var(--indigo-500)',
+                      background: 'rgba(99,102,241,0.09)',
+                      color: 'var(--indigo-700,#4338ca)',
+                      fontStyle: 'italic',
+                    }}
+                    title={`[${t._teamName ?? '팀'}] ${t.title}`}
+                  >
+                    <i className="fas fa-users" style={{ fontSize: '0.55rem', marginRight: 3, opacity: 0.7 }} />
                     <span className="week-task-title">{t.title}</span>
                   </div>
                 ))}

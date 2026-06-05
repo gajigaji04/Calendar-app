@@ -45,6 +45,22 @@ export async function updateTeamTask(id, updates) {
   if (error) throw new Error(error.message);
 }
 
+/** 날짜 범위로 팀 태스크 조회 (캘린더 표시용, RLS로 내 팀 것만 반환) */
+export async function getTeamTasksByDateRange(start, end) {
+  const { data } = await getSupabase()
+    .from('team_tasks')
+    .select('*, teams(id, name)')
+    .gte('date', start)
+    .lte('date', end)
+    .order('date');
+  return (data ?? []).map(t => ({
+    ...t,
+    _teamId:   t.teams?.id,
+    _teamName: t.teams?.name,
+    _source:   'team',
+  }));
+}
+
 /** 나에게 할당된 팀 태스크 (미완료 전체) */
 export async function getMyTeamAssignedTasks(userId) {
   const { data } = await getSupabase()

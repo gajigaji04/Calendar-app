@@ -3,8 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import { getTeam, getTeamMembers, removeMember, leaveTeam, regenerateInviteCode, transferOwnership } from '@/models/teamModel';
-import { getTasksByUserIds } from '@/models/taskModel';
-import { getTeamTasks, createTeamTask, toggleTeamTask, deleteTeamTask } from '@/models/teamTaskModel';
+import { getTeamTasks, createTeamTask, toggleTeamTask, deleteTeamTask, getTeamTasksByDateRange } from '@/models/teamTaskModel';
 import TaskModal from '@/components/task/TaskModal';
 import KO_HOLIDAYS from '@/lib/koHolidays';
 
@@ -184,7 +183,7 @@ function computeReport(tasks, members, today) {
   const rate      = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   const memberStats = members.map(m => {
-    const mt      = tasks.filter(t => t.user_id === m.user_id);
+    const mt      = tasks.filter(t => (t.assigned_to ?? t.created_by) === m.user_id);
     const pending = mt.filter(t => !t.completed && t.date >= today);
     return {
       userId:       m.user_id,
@@ -235,18 +234,17 @@ export default function TeamCalendarPage() {
     const [t, m] = await Promise.all([getTeam(teamId), getTeamMembers(teamId)]);
     setTeam(t);
     setMembers(m);
-    const memberIds = m.map(x => x.user_id);
 
     // 월별 캘린더용
     const start = toDateStr(new Date(year, month, 1));
     const end   = toDateStr(new Date(year, month + 1, 0));
-    const ts    = await getTasksByUserIds(memberIds, start, end);
+    const ts    = await getTeamTasksByDateRange(start, end);
     setMonthTasks(ts);
 
     // 리포트용 (60일 전 ~ 30일 후)
     const rStart = addDays(todayStr, -60);
     const rEnd   = addDays(todayStr, 30);
-    const rts    = await getTasksByUserIds(memberIds, rStart, rEnd);
+    const rts    = await getTeamTasksByDateRange(rStart, rEnd);
     setReportTasks(rts);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, teamId, year, month]);
@@ -266,8 +264,7 @@ export default function TeamCalendarPage() {
   // 연간 데이터 로드
   const loadYear = useCallback(async (yr) => {
     if (!members.length) return;
-    const ids = members.map(m => m.user_id);
-    const ts = await getTasksByUserIds(ids, `${yr}-01-01`, `${yr}-12-31`);
+    const ts = await getTeamTasksByDateRange(`${yr}-01-01`, `${yr}-12-31`);
     setYearTasks(ts);
   }, [members]);
 
@@ -361,7 +358,7 @@ export default function TeamCalendarPage() {
   // 멤버 필터 적용
   const visibleTasks = filterMembers.size === 0
     ? monthTasks
-    : monthTasks.filter(t => filterMembers.has(t.user_id));
+    : monthTasks.filter(t => filterMembers.has(t.assigned_to) || filterMembers.has(t.created_by));
 
   const taskMap = {};
   visibleTasks.forEach(t => {
@@ -389,7 +386,7 @@ export default function TeamCalendarPage() {
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStr + 'T00:00:00'); d.setDate(d.getDate() + i); return toDateStr(d);
   });
-  const visWeek  = filterMembers.size === 0 ? monthTasks : monthTasks.filter(t => filterMembers.has(t.user_id));
+  const visWeek  = filterMembers.size === 0 ? monthTasks : monthTasks.filter(t => filterMembers.has(t.assigned_to) || filterMembers.has(t.created_by));
   const wTaskMap = {};
   visWeek.forEach(t => { (wTaskMap[t.date] = wTaskMap[t.date] ?? []).push(t); });
   const wS = new Date(weekStr + 'T00:00:00');
@@ -503,7 +500,7 @@ export default function TeamCalendarPage() {
                   const mStr    = `${navYear}-${String(mi+1).padStart(2,'0')}`;
                   const mDays   = new Date(navYear, mi+1, 0).getDate();
                   const mFirst  = new Date(navYear, mi, 1).getDay();
-                  const taskSet = new Set((filterMembers.size === 0 ? yearTasks : yearTasks.filter(t => filterMembers.has(t.user_id))).filter(t => t.date.startsWith(mStr)).map(t => t.date));
+                  const taskSet = new Set((filterMembers.size === 0 ? yearTasks : yearTasks.filter(t => filterMembers.has(t.assigned_to) || filterMembers.has(t.created_by))).filter(t => t.date.startsWith(mStr)).map(t => t.date));
                   return (
                     <div key={mi}
                       onClick={() => { setYear(navYear); setMonth(mi); setCalView('month'); }}
@@ -579,11 +576,14 @@ export default function TeamCalendarPage() {
                         {dayT.length > 0 && <div style={{ fontSize: '0.62rem', color: 'var(--indigo-400,#818cf8)', fontWeight: 700 }}>{dayT.length}</div>}
                       </div>
                       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 3px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        {dayT.map(t => (
-                          <div key={t.id} style={{ fontSize: '0.68rem', padding: '2px 5px', borderRadius: 4, borderLeft: `3px solid ${memberColor(t.user_id)}`, background: memberColor(t.user_id) + '18', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: t.completed ? 'line-through' : 'none', opacity: t.completed ? 0.5 : 1 }} title={`${memberName(t.user_id)}: ${t.title}`}>
+                        {dayT.map(t => {
+                          const owner = t.assigned_to ?? t.created_by;
+                          return (
+                          <div key={t.id} style={{ fontSize: '0.68rem', padding: '2px 5px', borderRadius: 4, borderLeft: `3px solid ${memberColor(owner)}`, background: memberColor(owner) + '18', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: t.completed ? 'line-through' : 'none', opacity: t.completed ? 0.5 : 1 }} title={`${memberName(owner)}: ${t.title}`}>
                             {t.title}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   );
@@ -635,12 +635,12 @@ export default function TeamCalendarPage() {
                               <div
                                 key={t.id}
                                 className={`cell-task ${t.priority || 'low'}${t.completed ? ' done' : ''}`}
-                                style={{ borderLeft: `3px solid ${memberColor(t.user_id)}` }}
-                                title={`${memberName(t.user_id)}: ${t.title}`}
+                                style={{ borderLeft: `3px solid ${memberColor(t.assigned_to ?? t.created_by)}` }}
+                                title={`${memberName(t.assigned_to ?? t.created_by)}: ${t.title}`}
                               >
                                 <span style={{
                                   display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
-                                  background: memberColor(t.user_id), marginRight: 4, flexShrink: 0,
+                                  background: memberColor(t.assigned_to ?? t.created_by), marginRight: 4, flexShrink: 0,
                                 }} />
                                 {t.title}
                               </div>
@@ -674,11 +674,11 @@ export default function TeamCalendarPage() {
                 ) : panelTasks.map(t => (
                   <div key={t.id} style={{
                     padding: '8px 10px', borderRadius: 'var(--radius-sm)',
-                    background: 'var(--bg)', borderLeft: `3px solid ${memberColor(t.user_id)}`,
+                    background: 'var(--bg)', borderLeft: `3px solid ${memberColor(t.assigned_to ?? t.created_by)}`,
                   }}>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: memberColor(t.user_id), marginBottom: 2 }}>
-                      {memberName(t.user_id)}
-                      {t.user_id === user.id && <span style={{ fontSize: '0.68rem', marginLeft: 4, opacity: 0.7 }}>(나)</span>}
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: memberColor(t.assigned_to ?? t.created_by), marginBottom: 2 }}>
+                      {memberName(t.assigned_to ?? t.created_by)}
+                      {(t.assigned_to ?? t.created_by) === user.id && <span style={{ fontSize: '0.68rem', marginLeft: 4, opacity: 0.7 }}>(나)</span>}
                     </div>
                     <div style={{
                       fontSize: '0.83rem', color: 'var(--text)',

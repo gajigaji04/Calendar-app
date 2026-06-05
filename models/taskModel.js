@@ -121,6 +121,19 @@ export async function deleteRecurringSeries(recurrenceId) {
   if (error) throw new Error(error.message);
 }
 
+/** date만 있고 deadline이 없는 캘린더 일정 (date 기준 임박 조회) */
+export async function getUpcomingTasksByDate(userId, from, to) {
+  const { data } = await getSupabase().from('tasks')
+    .select('*')
+    .eq('user_id', userId)
+    .is('deadline', null)
+    .gte('date', from)
+    .lte('date', to)
+    .neq('completed', true)
+    .order('date');
+  return (data ?? []).map(t => ({ ...t, deadline: t.date, _source: 'calendar' }));
+}
+
 export async function getUpcomingDeadlines(userId, from, to) {
   const { data } = await getSupabase().from('tasks')
     .select('*')
