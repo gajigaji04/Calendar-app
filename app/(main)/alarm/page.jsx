@@ -9,7 +9,7 @@ const btnSecondary = { ...btnBase, background: 'var(--border-lt,#f1f5f9)', color
 
 function beep(times = 1) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = new (window.AudioContext || window['webkitAudioContext'])();
     for (let i = 0; i < times; i++) {
       const osc  = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -62,18 +62,46 @@ function AlarmTab() {
     return () => clearInterval(id);
   }, [alarms]);
 
-  const requestPerm = async () => { const p = await Notification.requestPermission(); setPerm(p); };
+  const [permLoading, setPermLoading] = useState(false);
+
+  const requestPerm = async () => {
+    if (permLoading) return;
+    setPermLoading(true);
+    try {
+      const p = await Notification.requestPermission();
+      setPerm(p);
+    } finally {
+      setPermLoading(false);
+    }
+  };
   const add    = () => { if (!time) return; setAlarms(p => [...p, { id: Date.now(), time, label, enabled: true }]); setLabel(''); };
   const toggle = id => setAlarms(p => p.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a));
   const remove = id => setAlarms(p => p.filter(a => a.id !== id));
 
   return (
     <div>
-      {perm !== 'granted' && (
-        <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', fontSize: '0.8rem', color: '#d97706' }}>
-          <i className="fas fa-triangle-exclamation" style={{ marginRight: 6 }} />
-          브라우저 알림 권한이 필요합니다.
-          <button onClick={requestPerm} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#d97706', textDecoration: 'underline', fontFamily: 'inherit', fontSize: 'inherit' }}>허용</button>
+      {perm === 'denied' && (
+        <div style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 10, background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.2)', fontSize: '0.8rem', color: '#dc2626' }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>
+            <i className="fas fa-ban" style={{ marginRight: 6 }} />알림 권한이 차단되었습니다
+          </div>
+          브라우저 주소창 왼쪽 자물쇠(🔒) 아이콘 → 알림 → <strong>허용</strong>으로 변경 후 새로고침하세요.
+        </div>
+      )}
+      {perm === 'default' && (
+        <div style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 10, background: 'rgba(245,158,11,.07)', border: '1px solid rgba(245,158,11,.22)' }}>
+          <div style={{ fontSize: '0.82rem', color: '#b45309', marginBottom: 8 }}>
+            <i className="fas fa-bell-slash" style={{ marginRight: 6 }} />
+            알람이 울릴 때 브라우저 알림을 받으려면 권한이 필요합니다.
+          </div>
+          <button
+            onClick={requestPerm}
+            disabled={permLoading}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 16px', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.85rem', cursor: permLoading ? 'wait' : 'pointer', opacity: permLoading ? .7 : 1 }}
+          >
+            <i className={`fas ${permLoading ? 'fa-spinner fa-spin' : 'fa-bell'}`} />
+            {permLoading ? '권한 요청 중…' : '알림 허용하기'}
+          </button>
         </div>
       )}
 
@@ -228,7 +256,7 @@ function TimerTab() {
       ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
       : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
   };
-  const numInput = (val, set, max) => Math.min(max, Math.max(0, parseInt(val) || 0));
+  const numInput = (val, max) => Math.min(max, Math.max(0, parseInt(val) || 0));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, paddingTop: 8 }}>
@@ -265,7 +293,7 @@ function TimerTab() {
         {[['시', hh, setHh, 99], ['분', mm, setMm, 59], ['초', ss, setSs, 59]].map(([lbl, val, set, max]) => (
           <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <input type="number" value={val} min={0} max={max}
-              onChange={e => set(numInput(e.target.value, set, max))}
+              onChange={e => set(numInput(e.target.value, max))}
               style={{ width: 52, padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', textAlign: 'center', fontSize: '0.9rem' }} />
             <span style={{ fontSize: '0.8rem', color: 'var(--text-sub)' }}>{lbl}</span>
           </div>
