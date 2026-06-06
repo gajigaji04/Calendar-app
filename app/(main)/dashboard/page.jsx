@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { getTasksByDate, getTasksByDateRange, createTask, toggleComplete } from '@/models/taskModel';
 import { useDeadlineAlerts } from '@/lib/useDeadlineAlerts';
 import { getMyTeamAssignedTasks } from '@/models/teamTaskModel';
+import { getSupabase } from '@/lib/supabase';
 
 const DAYS   = ['일','월','화','수','목','금','토'];
 const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
@@ -37,6 +38,11 @@ export default function DashboardPage() {
   const [weekTasks,   setWeekTasks]   = useState([]);
   const [streakDays,  setStreakDays]  = useState(0);
   const [assignedTeamTasks, setAssignedTeamTasks] = useState([]);
+  const [plan,           setPlan]           = useState('free');
+  const [monthTaskCount, setMonthTaskCount] = useState(0);
+  const [aiInput,    setAiInput]    = useState('');
+  const [aiLoading,  setAiLoading]  = useState(false);
+  const [aiPreview,  setAiPreview]  = useState(null);
 
   const { overdue, dueToday, soon, refresh: refreshAlerts } = useDeadlineAlerts();
   const soonClose = soon.filter(t => {
@@ -107,6 +113,48 @@ export default function DashboardPage() {
     getMyTeamAssignedTasks(user.id).then(setAssignedTeamTasks).catch(() => {});
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+    const sb = getSupabase();
+    const now2 = new Date();
+    const monthStart = `${now2.getFullYear()}-${String(now2.getMonth()+1).padStart(2,'0')}-01`;
+    Promise.all([
+      sb.from('user_plans').select('plan').eq('user_id', user.id).maybeSingle(),
+      sb.from('tasks').select('id', { count: 'exact', head: true }).eq('user_id', user.id).gte('created_at', monthStart),
+    ]).then(([planRes, countRes]) => {
+      setPlan(planRes.data?.plan ?? 'free');
+      setMonthTaskCount(countRes.count ?? 0);
+    }).catch(() => {});
+  }, [user]);
+
+  async function handleAISchedule(e) {
+    e.preventDefault();
+    if (!aiInput.trim() || !user) return;
+    setAiLoading(true);
+    setAiPreview(null);
+    try {
+      const res  = await fetch('/api/ai/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: aiInput.trim() }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'AI 오류');
+      setAiPreview(data);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  async function handleAIConfirm() {
+    if (!aiPreview?.tasks?.length) return;
+    for (const t of aiPreview.tasks) {
+      await createTask({ user_id: user.id, title: t.title, date: t.date, due_time: t.due_time || null, deadline: t.deadline || null, priority: t.priority || 'medium', recurrence: t.recurrence || 'none', description: t.description || '', completed: false });
+    }
+    setAiPreview(null);
+    setAiInput('');
+    loadToday();
+    refreshAlerts();
+  }
+
   async function handleToggle(id, cur) {
     await toggleComplete(id, cur);
     loadToday();
@@ -155,6 +203,54 @@ export default function DashboardPage() {
 
       <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
+        {/* ── AI 일정 추가 ── */}
+        <div className="card" style={{ padding: '14px 18px', background: 'linear-gradient(135deg,rgba(99,102,241,0.07),rgba(139,92,246,0.05))', border: '1px solid rgba(99,102,241,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+            <i className="fas fa-wand-magic-sparkles" style={{ color: 'var(--indigo-600)', fontSize: '0.85rem' }} />
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text)' }}>AI로 일정 추가</span>
+            <span style={{ fontSize: '0.65rem', fontWeight: 700, background: 'rgba(99,102,241,0.12)', color: 'var(--indigo-400,#818cf8)', padding: '1px 7px', borderRadius: 999 }}>Beta</span>
+          </div>
+          <form onSubmit={handleAISchedule} style={{ display: 'flex', gap: 8 }}>
+            <input
+              value={aiInput}
+              onChange={e => setAiInput(e.target.value)}
+              placeholder='예) "다음 주 화요일 오후 3시 팀 미팅, 긴급" / "매주 월 오전 10시 스탠드업"'
+              style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '8px 12px', fontSize: '0.85rem', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
+            />
+            <button type="submit" className="btn-primary btn-sm" disabled={aiLoading || !aiInput.trim()}>
+              {aiLoading
+                ? <i className="fas fa-spinner fa-spin" />
+                : <><i className="fas fa-sparkles" style={{ marginRight: 5 }} />추가</>}
+            </button>
+          </form>
+          {aiPreview && (
+            <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 10, background: 'var(--bg)', border: '1px solid var(--border)' }}>
+              {aiPreview.message && <p style={{ fontSize: '0.8rem', color: 'var(--text-sub)', marginBottom: 10 }}>{aiPreview.message}</p>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                {aiPreview.tasks?.map((t, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)' }}>
+                    <i className="fas fa-calendar-plus" style={{ color: 'var(--indigo-600)', fontSize: '0.78rem', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)' }}>{t.title}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-sub)', marginTop: 1 }}>
+                        {t.date}{t.due_time ? ` · ${t.due_time}` : ''}{t.deadline ? ` ~ ${t.deadline}` : ''}
+                        {t.priority === 'high' && <span style={{ marginLeft: 6, color: 'var(--red-500)', fontWeight: 700 }}>긴급</span>}
+                        {t.recurrence && t.recurrence !== 'none' && <span style={{ marginLeft: 6, color: 'var(--indigo-600)' }}>반복</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn-primary btn-sm" style={{ flex: 1 }} onClick={handleAIConfirm}>
+                  <i className="fas fa-check" style={{ marginRight: 5 }} />추가하기
+                </button>
+                <button className="btn-secondary btn-sm" onClick={() => setAiPreview(null)}>취소</button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* ── 통계 카드 4개 ── */}
         <div className="dash-stat-grid">
           <StatCard icon="fas fa-list-check"     bg="var(--indigo-50)"  color="var(--indigo-600)" num={todayTasks.length} label="오늘 할일" />
@@ -162,6 +258,30 @@ export default function DashboardPage() {
           <StatCard icon="fas fa-hourglass-half" bg="var(--amber-lt)"   color="var(--amber)"      num={pending}          label="미완료" />
           <StatCard icon="fas fa-bell"           bg="var(--red-lt)"     color="var(--red)"         num={urgentCount}      label="마감 긴급" urgent={urgentCount > 0} />
         </div>
+
+        {/* ── 무료 플랜 사용량 배너 ── */}
+        {plan === 'free' && monthTaskCount >= 40 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '10px 16px', borderRadius: 10,
+            background: monthTaskCount >= 50 ? 'rgba(239,68,68,0.08)' : 'rgba(249,115,22,0.08)',
+            border: `1px solid ${monthTaskCount >= 50 ? 'rgba(239,68,68,0.3)' : 'rgba(249,115,22,0.3)'}`,
+          }}>
+            <i className={`fas ${monthTaskCount >= 50 ? 'fa-circle-xmark' : 'fa-triangle-exclamation'}`}
+              style={{ color: monthTaskCount >= 50 ? 'var(--red-500)' : '#f97316', fontSize: '1rem', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text)' }}>
+                {monthTaskCount >= 50 ? '이번 달 무료 한도 도달 (50/50)' : `이번 달 할일 ${monthTaskCount}/50개 사용 중`}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-sub)', marginTop: 1 }}>
+                {monthTaskCount >= 50 ? 'Pro로 업그레이드하면 무제한으로 사용할 수 있어요.' : `${50 - monthTaskCount}개 남았어요. Pro 업그레이드 시 무제한 사용 가능.`}
+              </div>
+            </div>
+            <button className="btn-primary btn-sm" onClick={() => router.push('/pricing')} style={{ flexShrink: 0, fontSize: '0.78rem' }}>
+              업그레이드
+            </button>
+          </div>
+        )}
 
         {/* ── 진행률 바 ── */}
         {todayTasks.length > 0 && (

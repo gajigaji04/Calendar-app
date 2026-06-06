@@ -1,14 +1,14 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/AuthContext';
-import { getTasksByDateRange, getTasksByUserIds, getActiveTasks } from '@/models/taskModel';
-import { getUserTeams, getTeamMembers } from '@/models/teamModel';
+import { getActiveTasks } from '@/models/taskModel';
+import { getTeamTasksByDateRange } from '@/models/teamTaskModel';
 
 const SUGGESTIONS = [
-  '오늘 할일 어떻게 정리할까요?',
-  '생산성을 높이는 팁 알려줘',
-  '미루는 습관 고치는 방법',
-  '우선순위 정하는 방법',
+  '오늘 일정 요약해줘',
+  '이번 주 마감 다가오는 것 알려줘',
+  '미완료 할일 중 긴급한 것은?',
+  '이번 주 팀 일정 있어?',
 ];
 
 function TypingDots() {
@@ -45,50 +45,114 @@ export default function AIAssistant() {
 
   async function buildContext() {
     if (!user) return '';
+
+    const now = new Date();
+    const DOW = ['일','월','화','수','목','금','토'];
+    const p   = n => String(n).padStart(2, '0');
+
+    // ★ 로컬 날짜 문자열 — toISOString() 사용 금지 (UTC 변환으로 1일 밀림)
+    const lds = d => `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+    const addD = (base, n) => { const d = new Date(base); d.setDate(d.getDate() + n); return d; };
+
+    const today  = lds(now);
+    const past7  = lds(addD(now, -7));
+
+    // 이번 주·다음 주 — setDate 기반 로컬 계산
+    const dow     = now.getDay();
+    const thisMon = addD(now, dow === 0 ? -6 : 1 - dow);
+    const thisSun = addD(thisMon, 6);
+    const nextMon = addD(thisMon, 7);
+    const nextSun = addD(thisSun, 7);
+
+    const base = [
+      `오늘: ${today} (${DOW[dow]}요일)`,
+      `이번 주(월~일): ${lds(thisMon)} ~ ${lds(thisSun)}`,
+      `다음 주(월~일): ${lds(nextMon)} ~ ${lds(nextSun)}`,
+    ].join('\n');
+
+    // 날짜 문자열이 YYYY-MM-DD로 시작하면 유효 (timestamp 형식도 허용)
+    const isValidDate = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s);
+    // 날짜 부분만 추출 (timestamp "2026-06-06T..." → "2026-06-06")
+    const dateOf = s => s.slice(0, 10);
+
+    const fmt = t => {
+      if (!isValidDate(t.date)) return null;
+      const ds = dateOf(t.date);
+      const d  = new Date(ds + 'T00:00:00');
+      if (isNaN(d.getTime())) return null;
+      const dl = isValidDate(t.deadline) ? dateOf(t.deadline) : null;
+      return `  • ${ds}(${DOW[d.getDay()]}요일) "${t.title}"` +
+        (t.due_time ? ` ${t.due_time}` : '') +
+        (t.priority === 'high' ? ' [긴급]' : '') +
+        (dl && dl !== ds ? ` (마감:${dl})` : '');
+    };
+
+    const in30       = lds(addD(now, 30));
+    const thisMonStr = lds(thisMon);
+    const thisSunStr = lds(thisSun);
+    const nextMonStr = lds(nextMon);
+    const nextSunStr = lds(nextSun);
+
+    // ① 개인 일정 — 이번 주/다음 주 명시 구분 (AI가 날짜 계산 없이 섹션명만 보면 됨)
+    let personalCtx = '[개인 일정]\n등록된 일정 없음 — 대시보드에서 AI로 일정을 추가해보세요.';
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const end14 = new Date(); end14.setDate(end14.getDate() + 14);
-      const end14Str = end14.toISOString().split('T')[0];
-
-      // 내 일정 (미완료만, 경량 쿼리)
-      const myTasks    = await getActiveTasks(user.id);
-      const todayMine  = myTasks.filter(t => !t.completed && t.date === today);
-      const upcoming   = myTasks.filter(t => !t.completed && t.date > today);
-
-      const myLines = [
-        `[나의 일정]`,
-        `오늘(${today}): ${todayMine.length ? todayMine.map(t => `${t.title}${t.due_time ? ' ' + t.due_time : ''}`).join(', ') : '없음'}`,
-        upcoming.length ? `향후 14일: ${upcoming.map(t => `${t.date} ${t.title}${t.due_time ? ' ' + t.due_time : ''}`).join(' / ')}` : '',
-      ].filter(Boolean).join('\n');
-
-      // 팀원 일정
-      const teams = await getUserTeams(user.id);
-      const teamLines = [];
-
-      for (const team of teams) {
-        const members     = await getTeamMembers(team.id);
-        const others      = members.filter(m => m.user_id !== user.id);
-        if (!others.length) continue;
-
-        const memberTasks = await getTasksByUserIds(others.map(m => m.user_id), today, end14Str);
-
-        const byMember = Object.fromEntries(
-          others.map(m => [m.user_id, { name: m.display_name || m.email || '멤버', tasks: [] }])
-        );
-        for (const t of memberTasks) {
-          if (!t.completed && byMember[t.user_id]) byMember[t.user_id].tasks.push(t);
-        }
-
-        const desc = Object.values(byMember)
-          .filter(m => m.tasks.length)
-          .map(m => `  ${m.name}: ${m.tasks.map(t => `${t.date} ${t.title}${t.due_time ? ' ' + t.due_time : ''}`).join(', ')}`)
-          .join('\n');
-
-        if (desc) teamLines.push(`[팀: ${team.name}]\n${desc}`);
+      const raw = await getActiveTasks(user.id);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[AI컨텍스트] 개인 태스크 수:', raw.length, '첫 번째 date 샘플:', raw[0]?.date);
       }
+      const myTasks = raw.filter(t => isValidDate(t.date));
 
-      return [myLines, ...teamLines].filter(Boolean).join('\n\n');
-    } catch { return ''; }
+      const beforeWeek = myTasks.filter(t => dateOf(t.date) < thisMonStr);
+      const thisWeek   = myTasks.filter(t => dateOf(t.date) >= thisMonStr && dateOf(t.date) <= thisSunStr);
+      const nextWeekT  = myTasks.filter(t => dateOf(t.date) >= nextMonStr && dateOf(t.date) <= nextSunStr);
+      const later      = myTasks.filter(t => dateOf(t.date) > nextSunStr && dateOf(t.date) <= in30);
+
+      if (beforeWeek.length || thisWeek.length || nextWeekT.length || later.length) {
+        personalCtx = [
+          '[개인 일정]',
+          beforeWeek.length ? `■ 지연 미완료(이번 주 이전, ${beforeWeek.length}개):\n${beforeWeek.map(fmt).filter(Boolean).join('\n')}` : null,
+          `■ 이번 주(${thisMonStr} ~ ${thisSunStr}):\n${thisWeek.length ? thisWeek.map(fmt).filter(Boolean).join('\n') : '  없음'}`,
+          `■ 다음 주(${nextMonStr} ~ ${nextSunStr}):\n${nextWeekT.length ? nextWeekT.map(fmt).filter(Boolean).join('\n') : '  없음'}`,
+          later.length ? `■ 이후(${lds(addD(nextSun, 1))} ~ ${in30}):\n${later.map(fmt).filter(Boolean).join('\n')}` : null,
+        ].filter(Boolean).join('\n');
+      }
+    } catch (e) {
+      console.error('[AI비서] 개인 일정 조회 실패:', e.message);
+      personalCtx = '[개인 일정]\n(일시적으로 조회할 수 없습니다 — 잠시 후 다시 시도하세요)';
+    }
+
+    // ② 팀 일정 — 이번 주/다음 주 명시 구분, 팀 없어도 섹션 항상 포함
+    let teamCtx = '[팀 일정]\n등록된 팀 일정이 없습니다.';
+    try {
+      const teamTasks = await getTeamTasksByDateRange(past7, in30);
+      const active = teamTasks.filter(t => !t.completed && isValidDate(t.date));
+
+      const teamFmt = t => {
+        const ds = dateOf(t.date);
+        const d  = new Date(ds + 'T00:00:00');
+        if (isNaN(d.getTime())) return null;
+        return `  • ${ds}(${DOW[d.getDay()]}요일) "${t.title}" [${t._teamName || '팀'}]` +
+          (t.assigned_to === user.id ? ' [내 담당]' : '') +
+          (t.priority === 'high' ? ' [긴급]' : '');
+      };
+
+      const tBefore   = active.filter(t => dateOf(t.date) < thisMonStr);
+      const tThisWeek = active.filter(t => dateOf(t.date) >= thisMonStr && dateOf(t.date) <= thisSunStr);
+      const tNextWeek = active.filter(t => dateOf(t.date) >= nextMonStr && dateOf(t.date) <= nextSunStr);
+      const tLater    = active.filter(t => dateOf(t.date) > nextSunStr && dateOf(t.date) <= in30);
+
+      if (active.length) {
+        teamCtx = [
+          '[팀 일정]',
+          tBefore.length  ? `■ 지연(이번 주 이전, ${tBefore.length}개):\n${tBefore.map(teamFmt).filter(Boolean).join('\n')}` : null,
+          `■ 이번 주(${thisMonStr} ~ ${thisSunStr}):\n${tThisWeek.length ? tThisWeek.map(teamFmt).filter(Boolean).join('\n') : '  없음'}`,
+          `■ 다음 주(${nextMonStr} ~ ${nextSunStr}):\n${tNextWeek.length ? tNextWeek.map(teamFmt).filter(Boolean).join('\n') : '  없음'}`,
+          tLater.length ? `■ 이후(${lds(addD(nextSun, 1))} ~ ${in30}):\n${tLater.map(teamFmt).filter(Boolean).join('\n')}` : null,
+        ].filter(Boolean).join('\n');
+      }
+    } catch { /* 팀 없거나 오류 */ }
+
+    return [base, personalCtx, teamCtx].filter(Boolean).join('\n\n');
   }
 
   async function send(text) {
@@ -187,8 +251,8 @@ export default function AIAssistant() {
               <i className="fas fa-wand-magic-sparkles" style={{ color: '#fff', fontSize: '0.85rem' }} />
             </div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>AI 비서</div>
-              <div style={{ fontSize: '0.68rem', color: 'var(--text-sub)' }}>Groq · 생산성 도우미</div>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>AI 일정 비서</div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-sub)' }}>Groq · 일정 전문 비서</div>
             </div>
             {msgs.length > 0 && (
               <button onClick={() => setMsgs([])} style={{
@@ -210,7 +274,7 @@ export default function AIAssistant() {
                 fontSize: '0.78rem', color: '#f59e0b',
               }}>
                 <i className="fas fa-triangle-exclamation" style={{ marginRight: 6 }} />
-                <code>.env.local</code>에 <code>GROQ_API_KEY</code>를 설정해야 AI 비서를 사용할 수 있습니다.
+                <code>.env.local</code>에 <code>GROQ_API_KEY</code>를 설정해야 AI 일정 비서를 사용할 수 있습니다.
               </div>
             )}
 
@@ -311,7 +375,7 @@ export default function AIAssistant() {
       {/* 플로팅 버튼 */}
       <button
         onClick={() => setOpen(p => !p)}
-        title="AI 비서"
+        title="AI 일정 비서"
         className={`widget-fab fab-ai-btn${open ? ' active' : ''}`}
         style={{
           width: 50, height: 50, borderRadius: '50%',

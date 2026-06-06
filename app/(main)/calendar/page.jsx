@@ -520,8 +520,12 @@ function MonthView({ year, month, tasks, teamTasks = [], todayStr, onDayClick, o
     taskMap[t.date].push(t);
   });
 
+  const teamSpanTasks = teamTasks.filter(t => t.deadline && t.deadline > t.date);
+  const teamSpanIds   = new Set(teamSpanTasks.map(t => t.id));
+
   const teamTaskMap = {};
   teamTasks.forEach(t => {
+    if (teamSpanIds.has(t.id)) return;
     if (!teamTaskMap[t.date]) teamTaskMap[t.date] = [];
     teamTaskMap[t.date].push(t);
   });
@@ -565,7 +569,10 @@ function MonthView({ year, month, tasks, teamTasks = [], todayStr, onDayClick, o
         const weekSpans = wStart && wEnd
           ? spanTasks.filter(t => t.date <= wEnd && t.deadline >= wStart)
           : [];
-        const spanCount = weekSpans.length;
+        const weekTeamSpans = wStart && wEnd
+          ? teamSpanTasks.filter(t => t.date <= wEnd && t.deadline >= wStart)
+          : [];
+        const spanCount = weekSpans.length + weekTeamSpans.length;
 
         return (
           <div key={wi} style={{ position: 'relative' }}>
@@ -600,6 +607,39 @@ function MonthView({ year, month, tasks, teamTasks = [], todayStr, onDayClick, o
                   {!isStart && isEnd && (
                     <span style={{ fontSize: '0.65rem', color: '#fff', padding: '0 5px' }}>🏁</span>
                   )}
+                </div>
+              );
+            })}
+
+            {/* 팀 기간 바 */}
+            {weekTeamSpans.map((span, si) => {
+              const startIdx = Math.max(0, week.findIndex(c => c.ds && c.ds >= span.date));
+              const endIdx   = Math.min(6, [...week].reverse().findIndex(c => c.ds && c.ds <= span.deadline));
+              const realEnd  = 6 - endIdx;
+              if (startIdx > realEnd) return null;
+              const left    = `${(startIdx / 7) * 100}%`;
+              const width   = `${((realEnd - startIdx + 1) / 7) * 100}%`;
+              const isStart = week[startIdx]?.ds === span.date;
+              const isEnd   = week[realEnd]?.ds === span.deadline;
+              const isSolo  = isStart && isEnd;
+              return (
+                <div
+                  key={`team-${span.id}`}
+                  className={`span-bar${isSolo ? ' span-solo' : isStart ? ' span-start' : isEnd ? ' span-end' : ''}`}
+                  style={{
+                    position: 'absolute',
+                    top: `${30 + (weekSpans.length + si) * 18}px`,
+                    left, width, zIndex: 2, pointerEvents: 'none',
+                    background: 'var(--indigo-500)',
+                    opacity: span.completed ? 0.4 : 0.78,
+                  }}
+                >
+                  {isStart && (
+                    <span style={{ fontSize: '0.65rem', color: '#fff', padding: '0 5px', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <i className="fas fa-users" style={{ fontSize: '0.55rem' }} />{span.title}
+                    </span>
+                  )}
+                  {!isStart && isEnd && <span style={{ fontSize: '0.65rem', color: '#fff', padding: '0 5px' }}>🏁</span>}
                 </div>
               );
             })}
@@ -735,18 +775,25 @@ function WeekView({ weekStart, tasks, teamTasks = [], todayStr, onDayClick, onAd
     taskMap[t.date].push(t);
   });
 
+  const teamSpanTasks = teamTasks.filter(t => t.deadline && t.deadline > t.date &&
+    t.date <= weekEndStr && t.deadline >= weekStartStr);
+  const teamSpanIds = new Set(teamSpanTasks.map(t => t.id));
+
   const teamTaskMap = {};
   teamTasks.forEach(t => {
+    if (teamSpanIds.has(t.id)) return;
     if (!teamTaskMap[t.date]) teamTaskMap[t.date] = [];
     teamTaskMap[t.date].push(t);
   });
 
-  const spanBarH = spanTasks.length > 0 ? spanTasks.length * 20 + 6 : 0;
+  const spanBarH = (spanTasks.length + teamSpanTasks.length) > 0
+    ? (spanTasks.length + teamSpanTasks.length) * 20 + 6
+    : 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* 기간 일정 바 */}
-      {spanTasks.length > 0 && (
+      {(spanTasks.length > 0 || teamSpanTasks.length > 0) && (
         <div style={{ position: 'relative', height: spanBarH, flexShrink: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
           {spanTasks.map((span, si) => {
             let startIdx = weekDays.findIndex(wd => wd.ds >= span.date);
@@ -774,6 +821,30 @@ function WeekView({ weekStart, tasks, teamTasks = [], todayStr, onDayClick, onAd
               >
                 <span style={{ fontSize: '0.65rem', color: '#fff', padding: '0 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
                   {isStart ? span.title : (isEnd ? '🏁' : '')}
+                </span>
+              </div>
+            );
+          })}
+          {teamSpanTasks.map((span, si) => {
+            let startIdx = weekDays.findIndex(wd => wd.ds >= span.date);
+            if (startIdx < 0) startIdx = 0;
+            let endIdx = 6;
+            for (let i = 6; i >= 0; i--) {
+              if (weekDays[i].ds <= span.deadline) { endIdx = i; break; }
+            }
+            const left    = `${(startIdx / 7) * 100}%`;
+            const width   = `${((endIdx - startIdx + 1) / 7) * 100}%`;
+            const isStart = weekDays[startIdx]?.ds === span.date;
+            const isEnd   = weekDays[endIdx]?.ds === span.deadline;
+            const isSolo  = isStart && isEnd;
+            return (
+              <div
+                key={`team-${span.id}`}
+                className={`span-bar${isSolo ? ' span-solo' : isStart ? ' span-start' : isEnd ? ' span-end' : ''}`}
+                style={{ position: 'absolute', top: (spanTasks.length + si) * 20 + 3, left, width, zIndex: 2, background: 'var(--indigo-500)', opacity: span.completed ? 0.4 : 0.78 }}
+              >
+                <span style={{ fontSize: '0.65rem', color: '#fff', padding: '0 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>
+                  {isStart ? <><i className="fas fa-users" style={{ fontSize: '0.55rem' }} />{span.title}</> : (isEnd ? '🏁' : '')}
                 </span>
               </div>
             );

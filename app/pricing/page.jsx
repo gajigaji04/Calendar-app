@@ -3,27 +3,26 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-const TEXT  = '#f0f0ff';
-const MUTED = 'rgba(255,255,255,0.45)';
-const DIM   = 'rgba(255,255,255,0.22)';
-const CARD  = 'rgba(255,255,255,0.035)';
+const TEXT   = '#f0f0ff';
+const MUTED  = 'rgba(255,255,255,0.48)';
+const DIM    = 'rgba(255,255,255,0.22)';
+const CARD   = 'rgba(255,255,255,0.035)';
 const BORDER = 'rgba(255,255,255,0.08)';
 
-function Logo({ size = 36, gradId = 'lg0' }) {
+function Logo({ size = 32, gradId = 'lg0' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
       <rect width="40" height="40" rx="11" fill={`url(#${gradId})`} />
       <rect x="8" y="14" width="24" height="1.5" rx=".75" fill="rgba(255,255,255,0.28)" />
       <rect x="12.5" y="8" width="3" height="8" rx="1.5" fill="rgba(255,255,255,0.92)" />
       <rect x="24.5" y="8" width="3" height="8" rx="1.5" fill="rgba(255,255,255,0.92)" />
-      <rect x="8"    y="19.5" width="13"   height="3" rx="1.5" fill="rgba(255,255,255,0.88)" />
-      <rect x="23.5" y="19.5" width="8.5"  height="3" rx="1.5" fill="rgba(255,255,255,0.35)" />
-      <rect x="8"    y="25.5" width="8"    height="3" rx="1.5" fill="rgba(255,255,255,0.35)" />
+      <rect x="8" y="19.5" width="13" height="3" rx="1.5" fill="rgba(255,255,255,0.88)" />
+      <rect x="23.5" y="19.5" width="8.5" height="3" rx="1.5" fill="rgba(255,255,255,0.35)" />
+      <rect x="8" y="25.5" width="8" height="3" rx="1.5" fill="rgba(255,255,255,0.35)" />
       <rect x="18.5" y="25.5" width="13.5" height="3" rx="1.5" fill="rgba(255,255,255,0.65)" />
       <defs>
         <linearGradient id={gradId} x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#6366f1" />
-          <stop offset="1" stopColor="#8b5cf6" />
+          <stop stopColor="#6366f1" /><stop offset="1" stopColor="#8b5cf6" />
         </linearGradient>
       </defs>
     </svg>
@@ -34,368 +33,298 @@ const PLANS = [
   {
     id: 'free',
     name: '무료',
-    desc: '개인 일정 관리를 시작하세요',
+    tagline: '개인 사용 · 팀 체험',
     monthly: 0,
     yearly: 0,
-    highlight: false,
     badge: null,
+    featured: false,
     cta: '무료로 시작',
     ctaHref: '/login',
+    members: '1명',
     features: [
-      { label: '개인 캘린더', ok: true },
-      { label: '할일 50개/월', ok: true },
-      { label: '월간 뷰', ok: true },
-      { label: '기본 알림', ok: true },
-      { label: '주간·일간 뷰', ok: false },
-      { label: '마감 전 알림', ok: false },
-      { label: '반복 일정', ok: false },
-      { label: '팀 기능', ok: false },
+      { label: '개인 캘린더 (월·주·일 뷰)',  ok: true },
+      { label: '할일 50개/월',                ok: true },
+      { label: '기본 알림',                   ok: true },
+      { label: '한국 공휴일 자동 표시',       ok: true },
+      { label: 'AI 자연어 일정 추가',         ok: false },
+      { label: 'AI 일정 자동 조율',           ok: false },
+      { label: '팀 캘린더·플래너',            ok: false },
+      { label: 'Slack·Notion 연동',           ok: false },
     ],
   },
   {
-    id: 'pro',
-    name: '프로',
-    desc: '혼자 쓰는 파워 유저를 위해',
-    monthly: 2990,
-    yearly: 2490,
-    highlight: true,
+    id: 'business',
+    name: 'Business',
+    tagline: '중소기업 · 스타트업 팀',
+    monthly: 19900,
+    yearly: 16600,
     badge: '가장 인기',
-    cta: '프로 시작하기',
+    featured: true,
+    cta: '팀 시작하기',
     ctaHref: null,
+    members: '최대 10명',
     features: [
-      { label: '무제한 할일', ok: true },
-      { label: '월·주·일 뷰', ok: true },
-      { label: '1시간·30분 전 알림', ok: true },
-      { label: '반복 일정', ok: true },
-      { label: '캘린더 내보내기(ICS)', ok: true },
-      { label: '우선 고객지원', ok: true },
-      { label: '팀 기능', ok: false },
-      { label: '팀원 초대', ok: false },
+      { label: '무제한 할일 · 일정',          ok: true },
+      { label: '팀원 최대 10명',              ok: true },
+      { label: 'AI 자연어 일정 추가',         ok: true, highlight: true },
+      { label: 'AI 일정 자동 조율 제안',      ok: true, highlight: true },
+      { label: '팀 캘린더 · 플래너',          ok: true },
+      { label: 'Slack · Notion 연동',         ok: true },
+      { label: '팀 생산성 분석 대시보드',     ok: true },
+      { label: '마감 전 알림 + 반복 일정',    ok: true },
+      { label: 'Google Calendar 동기화',      ok: true },
+      { label: '이메일 지원',                 ok: true },
     ],
   },
   {
-    id: 'team',
-    name: '팀',
-    desc: '2인 이상 팀 협업이 필요할 때',
-    monthly: 8290,
-    yearly: 6900,
-    highlight: false,
+    id: 'enterprise',
+    name: 'Enterprise',
+    tagline: '대기업 · 보안 필요 조직',
+    monthly: 49900,
+    yearly: 41600,
     badge: null,
-    cta: '팀 플랜 시작',
-    ctaHref: null,
+    featured: false,
+    cta: '도입 문의하기',
+    ctaHref: 'mailto:hello@teamcalendar.app',
+    members: '팀원 무제한',
     features: [
-      { label: '프로 기능 전체', ok: true },
-      { label: '팀 캘린더 공유', ok: true },
-      { label: '팀원 최대 20명 초대', ok: true },
-      { label: '팀 이벤트 & RSVP', ok: true },
-      { label: '팀 그룹 채팅', ok: true },
-      { label: '관리자 권한 관리', ok: true },
-      { label: '우선·전담 고객지원', ok: true },
-      { label: '사용 통계 대시보드', ok: true },
+      { label: 'Business 모든 기능',          ok: true },
+      { label: '팀원 무제한',                 ok: true },
+      { label: 'SSO (Single Sign-On)',        ok: true },
+      { label: '보안 감사 로그',              ok: true },
+      { label: '전용 온보딩 & 교육',         ok: true },
+      { label: 'SLA 99.9% 보장',             ok: true },
+      { label: '전담 고객 성공 매니저',       ok: true },
+      { label: '커스텀 도메인·브랜딩',        ok: true },
+      { label: '계약서 · 세금계산서 발행',    ok: true },
+      { label: '전화 지원',                   ok: true },
     ],
   },
-];
-
-const TABLE_ROWS = [
-  ['개인 캘린더',    true,      true,       true],
-  ['할일 관리',      '50개/월', '무제한',   '무제한'],
-  ['캘린더 뷰',      '월간',    '월·주·일', '월·주·일'],
-  ['마감 전 알림',   false,     true,       true],
-  ['반복 일정',      false,     true,       true],
-  ['내보내기(ICS)', false,     true,       true],
-  ['팀 캘린더 공유', false,     false,      true],
-  ['팀원 초대',      false,     false,      '최대 20명'],
-  ['RSVP 관리',      false,     false,      true],
-  ['팀 채팅',        false,     false,      true],
-  ['고객지원',       '기본',    '우선',     '전담'],
 ];
 
 const FAQ = [
-  { q: '무료 플랜은 언제까지 무료인가요?', a: '영구 무료입니다. 언제든 업그레이드할 수 있고, 무료 플랜은 계속 유지됩니다.' },
-  { q: '결제는 어떻게 하나요?', a: '토스페이먼츠를 통해 카드·계좌이체로 결제할 수 있습니다. 곧 오픈 예정입니다.' },
-  { q: '언제든 해지할 수 있나요?', a: '네, 언제든 해지할 수 있습니다. 해지 시 남은 기간은 사용 가능하며 환불 정책에 따라 처리됩니다.' },
-  { q: '팀 플랜은 몇 명부터 시작할 수 있나요?', a: '2명부터 최대 20명까지 사용할 수 있습니다. 인원수에 따라 총 금액이 계산됩니다.' },
-  { q: '데이터는 안전한가요?', a: 'Supabase의 Row Level Security로 내 데이터는 나만 볼 수 있습니다. 데이터는 암호화되어 저장됩니다.' },
+  { q: '팀 전체 요금인가요, 인당 요금인가요?', a: 'Business·Enterprise 모두 팀 전체 고정 요금입니다. 팀원이 늘어도 추가 비용이 없습니다.' },
+  { q: '언제든 해지할 수 있나요?', a: '네, 별도 위약금 없이 언제든 해지 가능합니다. 결제 기간 중 해지 시 남은 기간까지 서비스가 유지됩니다.' },
+  { q: '연간 결제 혜택은 무엇인가요?', a: '연간 결제 시 2개월치 금액을 절약할 수 있습니다. Business 기준 월 16,600원으로 이용 가능합니다.' },
+  { q: 'AI 일정 추가·조율은 어떻게 작동하나요?', a: '"다음 주 수요일 오후 2시 클라이언트 미팅, 높은 우선순위"처럼 자연어로 입력하면 AI가 날짜·시간·우선순위를 파악해 즉시 일정을 생성합니다. 일정 조율은 겹치는 일정을 분석해 최적 시간을 제안합니다.' },
+  { q: '기존 팀 도구(Slack, Notion)와 연동되나요?', a: '네. Slack으로 마감 알림을 받고, Notion DB와 양방향 동기화가 가능합니다. Google Calendar 가져오기/내보내기도 지원합니다.' },
+  { q: 'Enterprise 도입 문의는 어떻게 하나요?', a: 'hello@teamcalendar.app으로 연락 주시면 영업일 기준 1일 이내 회신 드립니다. 데모 세션도 제공합니다.' },
 ];
 
-function fmt(n) {
-  return n === 0 ? '무료' : `₩${n.toLocaleString('ko-KR')}`;
-}
-
 export default function PricingPage() {
-  const [yearly,   setYearly]   = useState(false);
-  const [openFaq,  setOpenFaq]  = useState(null);
-  const [loading,  setLoading]  = useState('');
+  const [yearly, setYearly] = useState(false);
   const router = useRouter();
 
-  async function handleBuy(plan) {
-    if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
-      alert('결제 시스템을 준비 중입니다. 곧 오픈됩니다! 🚀');
+  async function handleUpgrade(planId) {
+    if (planId === 'enterprise') {
+      window.location.href = 'mailto:hello@teamcalendar.app?subject=Enterprise 도입 문의';
       return;
     }
-    setLoading(plan.id);
     try {
-      const res  = await fetch('/api/stripe/checkout', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ plan: plan.id }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error);
-      if (json.url) router.push(json.url);
-    } catch (e) {
-      alert(e.message);
-    } finally {
-      setLoading('');
+      const res  = await fetch('/api/stripe/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: planId }) });
+      const data = await res.json();
+      if (data.url) { window.location.href = data.url; return; }
+      if (data.error === '인증 필요') { router.push('/login?next=/pricing'); return; }
+      alert(data.error || '결제 준비 중입니다. 잠시 후 다시 시도해 주세요.');
+    } catch {
+      alert('결제 서버에 연결할 수 없습니다.');
     }
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#070711',
-      color: TEXT,
-      fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Noto Sans KR',sans-serif",
-      overflowX: 'hidden',
-    }}>
+    <div style={{ minHeight: '100vh', background: '#070711', color: TEXT, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Noto Sans KR',sans-serif" }}>
 
-      {/* ── 배경 글로우 ── */}
-      <div style={{ position:'fixed', inset:0, pointerEvents:'none', zIndex:0, overflow:'hidden' }}>
-        <div className="animate-glow" style={{ position:'absolute', top:'-15%', left:'50%', transform:'translateX(-50%)', width:'900px', height:'700px', background:'radial-gradient(ellipse, rgba(99,102,241,0.12) 0%, transparent 65%)' }} />
-        <div style={{ position:'absolute', bottom:'0', right:'-5%', width:'500px', height:'500px', background:'radial-gradient(ellipse, rgba(139,92,246,0.06) 0%, transparent 65%)' }} />
-        <div style={{ position:'absolute', inset:0, backgroundImage:'linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px)', backgroundSize:'72px 72px', maskImage:'radial-gradient(ellipse 80% 50% at 50% 0%, black, transparent)' }} />
-      </div>
-
-      {/* ── NAV ── */}
-      <nav style={{ position:'fixed', top:0, left:0, right:0, zIndex:100, height:'64px', display:'flex', alignItems:'center', background:'rgba(7,7,17,0.8)', backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)', borderBottom:'1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'0 48px', width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <Link href="/" style={{ display:'flex', alignItems:'center', gap:'10px', textDecoration:'none' }}>
-            <Logo size={32} gradId="pNavLg" />
-            <span style={{ fontWeight:800, fontSize:'17px', letterSpacing:'-0.025em', color:TEXT }}>
-              Team<span style={{ color:'#818cf8' }}>Calendar</span>
-            </span>
+      {/* NAV */}
+      <nav style={{ position: 'sticky', top: 0, zIndex: 100, height: 60, display: 'flex', alignItems: 'center', background: 'rgba(7,7,17,0.9)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none' }}>
+            <Logo size={26} gradId="pricingNav" />
+            <span style={{ fontWeight: 800, fontSize: 16, color: TEXT }}>Team<span style={{ color: '#818cf8' }}>Calendar</span></span>
           </Link>
-          <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
-            <Link href="/login" style={{ fontSize:'14px', color:MUTED, padding:'7px 12px', borderRadius:'8px', textDecoration:'none' }}>
-              로그인
-            </Link>
-            <Link href="/login" style={{ fontSize:'13px', fontWeight:700, color:'#fff', padding:'8px 18px', borderRadius:'10px', textDecoration:'none', background:'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow:'0 4px 20px rgba(99,102,241,0.45)' }}>
-              무료로 시작
-            </Link>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Link href="/login" style={{ fontSize: 13, color: MUTED, padding: '6px 12px', borderRadius: 8, textDecoration: 'none' }}>로그인</Link>
+            <Link href="/login" style={{ fontSize: 13, fontWeight: 700, color: '#fff', padding: '7px 16px', borderRadius: 9, textDecoration: 'none', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>무료 시작</Link>
           </div>
         </div>
       </nav>
 
-      {/* ── CONTENT ── */}
-      <div style={{ position:'relative', zIndex:1, paddingTop:'112px', paddingBottom:'96px' }}>
-        <div style={{ maxWidth:'1100px', margin:'0 auto', padding:'0 48px' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 24px 96px' }}>
 
-          {/* ── 헤딩 ── */}
-          <div style={{ textAlign:'center', marginBottom:'56px' }}>
-            <div style={{ display:'inline-flex', alignItems:'center', gap:'6px', background:'rgba(16,185,129,0.12)', border:'1px solid rgba(16,185,129,0.25)', borderRadius:'999px', padding:'5px 14px', marginBottom:'16px', fontSize:'12px', fontWeight:700, color:'#6ee7b7', letterSpacing:'0.04em' }}>
-              ✦&nbsp; 요금제
-            </div>
-            <h1 style={{ fontSize:'clamp(1.9rem,4vw,3rem)', fontWeight:900, letterSpacing:'-0.035em', marginBottom:'14px' }}>
-              합리적인 가격으로 시작하세요
-            </h1>
-            <p style={{ fontSize:'16px', color:MUTED, marginBottom:'36px' }}>
-              무료로 시작하고, 필요할 때 언제든 업그레이드하세요.
-            </p>
-
-            {/* 월간/연간 토글 */}
-            <div style={{ display:'inline-flex', alignItems:'center', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:'999px', padding:'4px' }}>
-              <button
-                onClick={() => setYearly(false)}
-                style={{ padding:'7px 20px', borderRadius:'999px', fontSize:'13px', fontWeight:700, cursor:'pointer', border:'none', fontFamily:'inherit', transition:'all .2s',
-                  background: !yearly ? 'rgba(99,102,241,0.25)' : 'transparent',
-                  color: !yearly ? '#818cf8' : MUTED,
-                  boxShadow: !yearly ? 'inset 0 0 0 1px rgba(99,102,241,0.4)' : 'none',
-                }}>
-                월간 결제
-              </button>
-              <button
-                onClick={() => setYearly(true)}
-                style={{ display:'flex', alignItems:'center', gap:'6px', padding:'7px 20px', borderRadius:'999px', fontSize:'13px', fontWeight:700, cursor:'pointer', border:'none', fontFamily:'inherit', transition:'all .2s',
-                  background: yearly ? 'rgba(99,102,241,0.25)' : 'transparent',
-                  color: yearly ? '#818cf8' : MUTED,
-                  boxShadow: yearly ? 'inset 0 0 0 1px rgba(99,102,241,0.4)' : 'none',
-                }}>
-                연간 결제
-                <span style={{ background:'rgba(16,185,129,0.2)', color:'#6ee7b7', fontSize:'10px', fontWeight:800, padding:'2px 7px', borderRadius:'999px' }}>
-                  2개월 무료
-                </span>
-              </button>
-            </div>
+        {/* 헤더 */}
+        <div style={{ textAlign: 'center', marginBottom: 52 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 999, padding: '5px 14px', marginBottom: 20, fontSize: 12, fontWeight: 700, color: '#a5b4fc' }}>
+            ✦ 팀 단위 요금제
           </div>
-
-          {/* ── 플랜 카드 ── */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'24px', marginBottom:'80px' }}>
-            {PLANS.map(plan => {
-              const price = yearly ? plan.yearly : plan.monthly;
-
-              if (plan.highlight) return (
-                <div key={plan.id} style={{ background:'linear-gradient(135deg,#6366f1,#8b5cf6)', padding:'1.5px', borderRadius:'22px', boxShadow:'0 0 56px rgba(99,102,241,0.32)', position:'relative' }}>
-                  {plan.badge && (
-                    <div style={{ position:'absolute', top:'-14px', left:'50%', transform:'translateX(-50%)', background:'linear-gradient(135deg,#f59e0b,#f97316)', color:'#fff', fontSize:'11px', fontWeight:800, padding:'4px 14px', borderRadius:'999px', letterSpacing:'0.05em', whiteSpace:'nowrap' }}>
-                      {plan.badge}
-                    </div>
-                  )}
-                  <div style={{ background:'#0f0f20', borderRadius:'21px', padding:'32px 28px', height:'100%', display:'flex', flexDirection:'column' }}>
-                    <PlanBody plan={plan} price={price} yearly={yearly} dark onBuy={handleBuy} loading={loading} />
-                  </div>
-                </div>
-              );
-
-              return (
-                <div key={plan.id} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:'22px', padding:'32px 28px', display:'flex', flexDirection:'column' }}>
-                  {plan.badge && (
-                    <div style={{ position:'absolute', top:'-14px', left:'50%', transform:'translateX(-50%)', background:'linear-gradient(135deg,#f59e0b,#f97316)', color:'#fff', fontSize:'11px', fontWeight:800, padding:'4px 14px', borderRadius:'999px', letterSpacing:'0.05em', whiteSpace:'nowrap' }}>
-                      {plan.badge}
-                    </div>
-                  )}
-                  <PlanBody plan={plan} price={price} yearly={yearly} onBuy={handleBuy} loading={loading} />
-                </div>
-              );
-            })}
-          </div>
-
-          <p style={{ textAlign:'center', marginTop:'-56px', marginBottom:'80px', fontSize:'13px', color:DIM }}>
-            연간 결제 시 2개월 무료 · 언제든 해지 가능 · 신용카드 불필요 (무료)
+          <h1 style={{ fontSize: 'clamp(2rem,4vw,3rem)', fontWeight: 900, letterSpacing: '-0.035em', marginBottom: 14 }}>
+            팀 전체 고정 요금제
+          </h1>
+          <p style={{ fontSize: 16, color: MUTED, marginBottom: 32 }}>
+            인당 과금 없이 팀 전체가 하나의 요금으로. 멤버가 늘어도 추가 비용 없습니다.
           </p>
 
-          {/* ── 기능 비교 표 ── */}
-          <div style={{ marginBottom:'80px' }}>
-            <h2 style={{ fontSize:'clamp(1.4rem,2.5vw,1.9rem)', fontWeight:900, letterSpacing:'-0.03em', textAlign:'center', marginBottom:'32px' }}>
-              플랜 비교
-            </h2>
-            <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:'18px', overflow:'hidden' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'13.5px' }}>
-                <thead>
-                  <tr style={{ borderBottom:`1px solid ${BORDER}` }}>
-                    <th style={{ textAlign:'left', padding:'16px 24px', color:MUTED, fontWeight:600, width:'40%' }}>기능</th>
-                    {PLANS.map(p => (
-                      <th key={p.id} style={{ padding:'16px 12px', fontWeight:800, textAlign:'center',
-                        color: p.highlight ? '#818cf8' : TEXT }}>
-                        {p.name}
-                      </th>
+          {/* 월간/연간 토글 */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 999, padding: '5px 6px' }}>
+            <button
+              onClick={() => setYearly(false)}
+              style={{ padding: '6px 18px', borderRadius: 999, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, background: !yearly ? 'rgba(99,102,241,0.25)' : 'transparent', color: !yearly ? '#a5b4fc' : MUTED, transition: 'all .15s' }}
+            >월간</button>
+            <button
+              onClick={() => setYearly(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 18px', borderRadius: 999, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, background: yearly ? 'rgba(99,102,241,0.25)' : 'transparent', color: yearly ? '#a5b4fc' : MUTED, transition: 'all .15s' }}
+            >
+              연간
+              <span style={{ fontSize: 10, fontWeight: 800, background: 'rgba(16,185,129,0.2)', color: '#6ee7b7', padding: '1px 7px', borderRadius: 999 }}>2개월 무료</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 요금제 카드 */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 20, marginBottom: 56 }}>
+          {PLANS.map(plan => {
+            const price = yearly ? plan.yearly : plan.monthly;
+            const cardContent = (
+              <>
+                {plan.badge && (
+                  <div style={{ position: 'absolute', top: -13, left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(135deg,#f59e0b,#f97316)', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 14px', borderRadius: 999, whiteSpace: 'nowrap' }}>
+                    {plan.badge}
+                  </div>
+                )}
+                <div style={{ marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: DIM, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{plan.name}</span>
+                  <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>{plan.tagline}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, margin: '12px 0 4px' }}>
+                  <span style={{ fontSize: 38, fontWeight: 900, letterSpacing: '-0.04em', color: TEXT }}>
+                    {price === 0 ? '무료' : `₩${price.toLocaleString('ko-KR')}`}
+                  </span>
+                  {price > 0 && <span style={{ fontSize: 13, color: MUTED }}>/월 · 팀 전체</span>}
+                </div>
+                <div style={{ fontSize: 12, color: MUTED, marginBottom: 6 }}>
+                  {price === 0 ? '영구 무료' : yearly ? `연간 ₩${(price * 12).toLocaleString('ko-KR')} (2개월 무료)` : '연간 결제 시 17% 할인'}
+                </div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '3px 10px', fontSize: 12, color: MUTED, marginBottom: 20 }}>
+                  👥 {plan.members}
+                </div>
+                <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 9, flex: 1, marginBottom: 24 }}>
+                  {plan.features.map(f => (
+                    <li key={f.label} style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13.5, color: f.ok ? (f.highlight ? '#a5b4fc' : TEXT) : 'rgba(255,255,255,0.2)', fontWeight: f.highlight ? 700 : 400 }}>
+                      <span style={{ color: f.ok ? '#6ee7b7' : 'rgba(255,255,255,0.15)', fontWeight: 900, fontSize: 12, flexShrink: 0 }}>
+                        {f.ok ? '✓' : '—'}
+                      </span>
+                      {f.label}
+                      {f.highlight && <span style={{ fontSize: 10, background: 'rgba(99,102,241,0.2)', color: '#818cf8', padding: '1px 6px', borderRadius: 999, fontWeight: 800, marginLeft: 2 }}>AI</span>}
+                    </li>
+                  ))}
+                </ul>
+                {plan.ctaHref ? (
+                  <Link href={plan.ctaHref} style={{ display: 'block', textAlign: 'center', padding: '12px', borderRadius: 12, fontWeight: 700, fontSize: 14, textDecoration: 'none', background: plan.featured ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.06)', border: plan.featured ? '1px solid rgba(255,255,255,0.22)' : `1px solid ${BORDER}`, color: TEXT }}>
+                    {plan.cta}
+                  </Link>
+                ) : (
+                  <button
+                    onClick={() => handleUpgrade(plan.id)}
+                    style={{ width: '100%', padding: '12px', borderRadius: 12, fontWeight: 700, fontSize: 14, background: plan.featured ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.06)', border: plan.featured ? '1px solid rgba(255,255,255,0.22)' : `1px solid ${BORDER}`, color: TEXT, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    {plan.cta}
+                  </button>
+                )}
+              </>
+            );
+
+            return plan.featured ? (
+              <div key={plan.id} style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', padding: '1.5px', borderRadius: 20, boxShadow: '0 0 48px rgba(99,102,241,0.28)' }}>
+                <div style={{ background: '#0f0f20', borderRadius: 19, padding: '28px 24px', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+                  {cardContent}
+                </div>
+              </div>
+            ) : (
+              <div key={plan.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 20, padding: '28px 24px', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+                {cardContent}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 기능 전체 비교표 */}
+        <div style={{ marginBottom: 72 }}>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: TEXT, textAlign: 'center', marginBottom: 32 }}>전체 기능 비교</h2>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: 12, color: DIM, fontWeight: 600, letterSpacing: '0.05em' }}>기능</th>
+                  {PLANS.map(p => (
+                    <th key={p.id} style={{ textAlign: 'center', padding: '12px 16px', fontSize: 13, fontWeight: 800, color: p.featured ? '#818cf8' : MUTED, whiteSpace: 'nowrap' }}>
+                      {p.featured && '✦ '}{p.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ['AI 자연어 일정 추가', false, true, true],
+                  ['AI 일정 자동 조율', false, true, true],
+                  ['팀 캘린더·플래너', false, true, true],
+                  ['Slack·Notion 연동', false, true, true],
+                  ['Google Calendar 동기화', false, true, true],
+                  ['팀원 수', '1명', '최대 10명', '무제한'],
+                  ['월 할일 한도', '50개', '무제한', '무제한'],
+                  ['반복 일정', false, true, true],
+                  ['팀 생산성 분석', false, true, true],
+                  ['SSO 로그인', false, false, true],
+                  ['보안 감사 로그', false, false, true],
+                  ['전담 고객 지원', false, false, true],
+                  ['SLA 보장', false, false, true],
+                ].map(([label, ...vals]) => (
+                  <tr key={label} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <td style={{ padding: '11px 16px', fontSize: 13.5, color: MUTED }}>{label}</td>
+                    {vals.map((v, i) => (
+                      <td key={i} style={{ textAlign: 'center', padding: '11px 16px', fontSize: 13 }}>
+                        {v === true  && <span style={{ color: '#6ee7b7', fontWeight: 900, fontSize: 15 }}>✓</span>}
+                        {v === false && <span style={{ color: 'rgba(255,255,255,0.15)' }}>—</span>}
+                        {typeof v === 'string' && <span style={{ color: TEXT, fontWeight: 600 }}>{v}</span>}
+                      </td>
                     ))}
                   </tr>
-                </thead>
-                <tbody>
-                  {TABLE_ROWS.map(([label, ...vals], i) => (
-                    <tr key={label} style={{ borderBottom: i < TABLE_ROWS.length - 1 ? `1px solid rgba(255,255,255,0.04)` : 'none' }}>
-                      <td style={{ padding:'13px 24px', color:MUTED }}>{label}</td>
-                      {vals.map((v, j) => (
-                        <td key={j} style={{ padding:'13px 12px', textAlign:'center' }}>
-                          {v === true  ? <span style={{ color:'#6ee7b7', fontWeight:900 }}>✓</span>
-                          : v === false ? <span style={{ color:'rgba(255,255,255,0.15)' }}>—</span>
-                          : <span style={{ color:TEXT, fontWeight:600, fontSize:'12px' }}>{v}</span>}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-
-          {/* ── FAQ ── */}
-          <div style={{ maxWidth:'672px', margin:'0 auto' }}>
-            <h2 style={{ fontSize:'clamp(1.4rem,2.5vw,1.9rem)', fontWeight:900, letterSpacing:'-0.03em', textAlign:'center', marginBottom:'32px' }}>
-              자주 묻는 질문
-            </h2>
-            <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
-              {FAQ.map((item, i) => (
-                <div key={i} style={{ background:CARD, border:`1px solid ${openFaq === i ? 'rgba(99,102,241,0.35)' : BORDER}`, borderRadius:'14px', overflow:'hidden', transition:'border-color .2s' }}>
-                  <button
-                    onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                    style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 20px', background:'none', border:'none', color:TEXT, fontSize:'14px', fontWeight:700, cursor:'pointer', fontFamily:'inherit', textAlign:'left', gap:'12px' }}>
-                    <span>{item.q}</span>
-                    <span style={{ flexShrink:0, color:MUTED, fontSize:'12px', transition:'transform .2s', transform: openFaq === i ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</span>
-                  </button>
-                  {openFaq === i && (
-                    <div style={{ padding:'0 20px 16px', fontSize:'13.5px', color:MUTED, lineHeight:1.7, borderTop:`1px solid rgba(255,255,255,0.05)`, paddingTop:'14px' }}>
-                      {item.a}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
         </div>
-      </div>
 
-      {/* ── FOOTER ── */}
-      <footer style={{ borderTop:'1px solid rgba(255,255,255,0.06)', paddingTop:'28px', paddingBottom:'28px', position:'relative', zIndex:1 }}>
-        <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'0 48px', display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'space-between', gap:'16px' }}>
-          <Link href="/" style={{ display:'flex', alignItems:'center', gap:'8px', textDecoration:'none' }}>
-            <Logo size={22} gradId="pFootLg" />
-            <span style={{ fontWeight:800, fontSize:'14px', color:TEXT }}>Team<span style={{ color:'#818cf8' }}>Calendar</span></span>
-          </Link>
-          <div style={{ display:'flex', gap:'20px', flexWrap:'wrap', justifyContent:'center' }}>
-            {[['홈','/'],['로그인','/login'],['이용약관','/terms'],['개인정보처리방침','/privacy']].map(([l,h])=>(
-              <Link key={l} href={h} style={{ fontSize:'13px', color:DIM, textDecoration:'none' }}>{l}</Link>
+        {/* FAQ */}
+        <div style={{ maxWidth: 720, margin: '0 auto' }}>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: TEXT, textAlign: 'center', marginBottom: 32 }}>자주 묻는 질문</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {FAQ.map(({ q, a }) => (
+              <div key={q} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: '18px 22px' }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: TEXT, marginBottom: 8 }}>{q}</div>
+                <div style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.65 }}>{a}</div>
+              </div>
             ))}
           </div>
-          <p style={{ fontSize:'12px', color:'rgba(255,255,255,0.2)' }}>© 2026 TeamCalendar</p>
         </div>
-      </footer>
+
+        {/* 하단 CTA */}
+        <div style={{ textAlign: 'center', marginTop: 72 }}>
+          <div style={{ background: 'linear-gradient(135deg,rgba(99,102,241,0.1),rgba(139,92,246,0.1))', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 24, padding: '48px 32px' }}>
+            <h3 style={{ fontSize: 'clamp(1.5rem,3vw,2rem)', fontWeight: 900, letterSpacing: '-0.03em', marginBottom: 12 }}>
+              우리 팀에 딱 맞는 플랜을 찾으셨나요?
+            </h3>
+            <p style={{ fontSize: 15, color: MUTED, marginBottom: 28 }}>
+              도입 5분, 신용카드 불필요. 팀 전체가 지금 바로 무료로 시작하세요.
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Link href="/login" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', fontWeight: 700, fontSize: 15, padding: '13px 28px', borderRadius: 12, textDecoration: 'none', boxShadow: '0 6px 24px rgba(99,102,241,0.4)' }}>
+                무료로 시작하기 →
+              </Link>
+              <a href="mailto:hello@teamcalendar.app" style={{ display: 'inline-flex', alignItems: 'center', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.8)', fontWeight: 600, fontSize: 15, padding: '13px 24px', borderRadius: 12, textDecoration: 'none' }}>
+                Enterprise 문의
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-  );
-}
-
-function PlanBody({ plan, price, yearly, dark = false, onBuy, loading = '' }) {
-  const t = dark ? '#f0f0ff' : TEXT;
-  const m = dark ? 'rgba(255,255,255,0.5)' : MUTED;
-  const d = dark ? 'rgba(255,255,255,0.25)' : DIM;
-
-  return (
-    <>
-      <div style={{ fontSize:'11px', fontWeight:800, color:d, marginBottom:'4px', letterSpacing:'0.08em', textTransform:'uppercase' }}>{plan.name}</div>
-      <div style={{ fontSize:'13px', color:m, marginBottom:'16px' }}>{plan.desc}</div>
-
-      <div style={{ display:'flex', alignItems:'baseline', gap:'4px', marginBottom:'4px' }}>
-        <span style={{ fontSize:'38px', fontWeight:900, letterSpacing:'-0.04em', color:t }}>
-          {fmt(price)}
-        </span>
-        {price > 0 && <span style={{ fontSize:'13px', color:m }}>/월{plan.id === 'team' ? '/인' : ''}</span>}
-      </div>
-      <div style={{ fontSize:'12px', color:m, marginBottom:'24px', minHeight:'18px' }}>
-        {price === 0 ? '영구 무료' : yearly ? `연 ${(price * 10).toLocaleString('ko-KR')}원 청구 · 17% 할인` : ''}
-      </div>
-
-      <ul style={{ listStyle:'none', display:'flex', flexDirection:'column', gap:'10px', flex:1, marginBottom:'24px' }}>
-        {plan.features.map(f => (
-          <li key={f.label} style={{ display:'flex', alignItems:'center', gap:'10px', fontSize:'13.5px' }}>
-            <span style={{ fontWeight:900, fontSize:'13px', color: f.ok ? '#6ee7b7' : 'rgba(255,255,255,0.18)', flexShrink:0 }}>
-              {f.ok ? '✓' : '—'}
-            </span>
-            <span style={{ color: f.ok ? t : 'rgba(255,255,255,0.25)' }}>{f.label}</span>
-          </li>
-        ))}
-      </ul>
-
-      {plan.ctaHref ? (
-        <Link href={plan.ctaHref} style={{ display:'block', textAlign:'center', padding:'12px', borderRadius:'12px', fontWeight:700, fontSize:'14px', textDecoration:'none',
-          background: dark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.07)',
-          border: dark ? '1px solid rgba(255,255,255,0.25)' : `1px solid ${BORDER}`,
-          color: t }}>
-          {plan.cta}
-        </Link>
-      ) : (
-        <button
-          onClick={() => onBuy(plan)}
-          disabled={!!loading}
-          style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:'8px', padding:'12px', borderRadius:'12px', fontWeight:700, fontSize:'14px', cursor: loading ? 'not-allowed' : 'pointer', fontFamily:'inherit', opacity: loading ? 0.7 : 1,
-            background: dark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.07)',
-            border: dark ? '1px solid rgba(255,255,255,0.25)' : `1px solid ${BORDER}`,
-            color: t }}>
-          {loading === plan.id
-            ? <span style={{ width:14, height:14, border:'2px solid rgba(255,255,255,0.3)', borderTopColor:'#fff', borderRadius:'50%', display:'inline-block', animation:'spin-slow .7s linear infinite' }} />
-            : plan.cta}
-        </button>
-      )}
-    </>
   );
 }

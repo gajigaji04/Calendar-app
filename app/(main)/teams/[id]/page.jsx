@@ -360,8 +360,12 @@ export default function TeamCalendarPage() {
     ? monthTasks
     : monthTasks.filter(t => filterMembers.has(t.assigned_to) || filterMembers.has(t.created_by));
 
+  const spanTasks = visibleTasks.filter(t => t.deadline && t.deadline > t.date);
+  const spanIds   = new Set(spanTasks.map(t => t.id));
+
   const taskMap = {};
   visibleTasks.forEach(t => {
+    if (spanIds.has(t.id)) return;
     if (!taskMap[t.date]) taskMap[t.date] = [];
     taskMap[t.date].push(t);
   });
@@ -386,9 +390,33 @@ export default function TeamCalendarPage() {
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStr + 'T00:00:00'); d.setDate(d.getDate() + i); return toDateStr(d);
   });
-  const visWeek  = filterMembers.size === 0 ? monthTasks : monthTasks.filter(t => filterMembers.has(t.assigned_to) || filterMembers.has(t.created_by));
-  const wTaskMap = {};
-  visWeek.forEach(t => { (wTaskMap[t.date] = wTaskMap[t.date] ?? []).push(t); });
+  const visWeek    = filterMembers.size === 0 ? monthTasks : monthTasks.filter(t => filterMembers.has(t.assigned_to) || filterMembers.has(t.created_by));
+  const wEnd0      = weekDays[weekDays.length - 1] ?? weekStr;
+  const wSpanTasks = visWeek.filter(t => t.deadline && t.deadline > t.date && t.date <= wEnd0 && t.deadline >= weekStr);
+  const wSpanIds   = new Set(wSpanTasks.map(t => t.id));
+  const wTaskMap   = {};
+  visWeek.forEach(t => {
+    if (wSpanIds.has(t.id)) return;
+    (wTaskMap[t.date] = wTaskMap[t.date] ?? []).push(t);
+  });
+  const wSpanBarH   = wSpanTasks.length > 0 ? wSpanTasks.length * 20 + 6 : 0;
+  const wSpanBarData = wSpanTasks.map((span, si) => {
+    let startIdx = weekDays.findIndex(ds => ds >= span.date);
+    if (startIdx < 0) startIdx = 0;
+    let endIdx = 6;
+    for (let i = 6; i >= 0; i--) {
+      if (weekDays[i] <= span.deadline) { endIdx = i; break; }
+    }
+    const isStart = weekDays[startIdx] === span.date;
+    const isEnd   = weekDays[endIdx] === span.deadline;
+    return {
+      span, si, isStart, isEnd,
+      isSolo: isStart && isEnd,
+      left:  `${(startIdx / 7) * 100}%`,
+      width: `${((endIdx - startIdx + 1) / 7) * 100}%`,
+      color: memberColor(span.assigned_to ?? span.created_by),
+    };
+  });
   const wS = new Date(weekStr + 'T00:00:00');
   const wE = new Date((weekDays[6] ?? weekStr) + 'T00:00:00');
   const weekRangeLabel = wS.getMonth() === wE.getMonth()
@@ -553,7 +581,23 @@ export default function TeamCalendarPage() {
                   이번 주
                 </button>
               </div>
-              <div className="card" style={{ flex: 1, minHeight: 0, padding: 0, overflow: 'auto', display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
+              <div className="card" style={{ flex: 1, minHeight: 0, padding: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+                {wSpanTasks.length > 0 && (
+                  <div style={{ position: 'relative', height: wSpanBarH, flexShrink: 0, borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+                    {wSpanBarData.map(({ span, si, isStart, isEnd, isSolo, left, width, color }) => (
+                      <div
+                        key={span.id}
+                        className={`span-bar${isSolo ? ' span-solo' : isStart ? ' span-start' : isEnd ? ' span-end' : ''}`}
+                        style={{ position: 'absolute', top: si * 20 + 3, left, width, zIndex: 2, background: color, opacity: span.completed ? 0.4 : 0.85 }}
+                      >
+                        <span style={{ fontSize: '0.65rem', color: '#fff', padding: '0 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                          {isStart ? span.title : (isEnd ? '🏁' : '')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7,1fr)' }}>
                 {weekDays.map((ds, ci) => {
                   const d       = new Date(ds + 'T00:00:00');
                   const isTd    = ds === todayStr;
@@ -588,6 +632,7 @@ export default function TeamCalendarPage() {
                     </div>
                   );
                 })}
+                </div>
               </div>
             </div>
           )}
@@ -609,49 +654,85 @@ export default function TeamCalendarPage() {
                 <div className="full-grid">
                   {DAYS.map(d => <div key={d} className="cal-hdr-cell">{d}</div>)}
                 </div>
-                {weeks.map((week, wi) => (
-                  <div key={wi} className="full-grid">
-                    {week.map((cell, ci) => {
-                      const cellTasks = cell.ds ? (taskMap[cell.ds] || []) : [];
-                      const isToday   = cell.ds === todayStr;
-                      const isSun     = ci === 0;
-                      const isSat     = ci === 6;
-                      const holiday   = cell.ds ? KO_HOLIDAYS[cell.ds] : null;
-                      return (
-                        <div
-                          key={wi * 7 + ci}
-                          className={['full-cell', cell.other ? 'other-month' : '', isToday ? 'today' : ''].filter(Boolean).join(' ')}
-                          onClick={() => cell.ds && setPanel(p => p === cell.ds ? null : cell.ds)}
-                          style={panel === cell.ds ? { background: 'var(--primary-lt)' } : undefined}
-                        >
-                          <div className="cell-head-row">
-                            <span className={`cell-num${isSun || holiday ? ' holiday-num' : isSat ? ' saturday-num' : ''}`}>
-                              {cell.d}
-                            </span>
+                {weeks.map((week, wi) => {
+                  const weekDs    = week.map(c => c.ds).filter(Boolean);
+                  const wStart    = weekDs[0];
+                  const wEnd      = weekDs[weekDs.length - 1];
+                  const weekSpans = wStart && wEnd
+                    ? spanTasks.filter(t => t.date <= wEnd && t.deadline >= wStart)
+                    : [];
+                  const spanCount = weekSpans.length;
+                  return (
+                    <div key={wi} style={{ position: 'relative' }}>
+                      {weekSpans.map((span, si) => {
+                        const startIdx = Math.max(0, week.findIndex(c => c.ds && c.ds >= span.date));
+                        const endIdx   = Math.min(6, [...week].reverse().findIndex(c => c.ds && c.ds <= span.deadline));
+                        const realEnd  = 6 - endIdx;
+                        if (startIdx > realEnd) return null;
+                        const isStart = week[startIdx]?.ds === span.date;
+                        const isEnd   = week[realEnd]?.ds === span.deadline;
+                        const isSolo  = isStart && isEnd;
+                        const color   = memberColor(span.assigned_to ?? span.created_by);
+                        return (
+                          <div
+                            key={span.id}
+                            className={`span-bar${isSolo ? ' span-solo' : isStart ? ' span-start' : isEnd ? ' span-end' : ''}`}
+                            style={{
+                              position: 'absolute',
+                              top: `${30 + si * 18}px`,
+                              left: `${(startIdx / 7) * 100}%`,
+                              width: `${((realEnd - startIdx + 1) / 7) * 100}%`,
+                              zIndex: 2, pointerEvents: 'none',
+                              background: color,
+                              opacity: span.completed ? 0.4 : 0.85,
+                            }}
+                          >
+                            {isStart && <span style={{ fontSize: '0.65rem', color: '#fff', padding: '0 5px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{span.title}</span>}
+                            {!isStart && isEnd && <span style={{ fontSize: '0.65rem', color: '#fff', padding: '0 5px' }}>🏁</span>}
                           </div>
-                          {holiday && <div className="cell-holiday-name">{holiday}</div>}
-                          <div className="cell-tasks">
-                            {cellTasks.slice(0, 3).map(t => (
-                              <div
-                                key={t.id}
-                                className={`cell-task ${t.priority || 'low'}${t.completed ? ' done' : ''}`}
-                                style={{ borderLeft: `3px solid ${memberColor(t.assigned_to ?? t.created_by)}` }}
-                                title={`${memberName(t.assigned_to ?? t.created_by)}: ${t.title}`}
-                              >
-                                <span style={{
-                                  display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
-                                  background: memberColor(t.assigned_to ?? t.created_by), marginRight: 4, flexShrink: 0,
-                                }} />
-                                {t.title}
+                        );
+                      })}
+                      <div className="full-grid">
+                        {week.map((cell, ci) => {
+                          const cellTasks = cell.ds ? (taskMap[cell.ds] || []) : [];
+                          const isToday   = cell.ds === todayStr;
+                          const isSun     = ci === 0;
+                          const isSat     = ci === 6;
+                          const holiday   = cell.ds ? KO_HOLIDAYS[cell.ds] : null;
+                          return (
+                            <div
+                              key={wi * 7 + ci}
+                              className={['full-cell', cell.other ? 'other-month' : '', isToday ? 'today' : ''].filter(Boolean).join(' ')}
+                              onClick={() => cell.ds && setPanel(p => p === cell.ds ? null : cell.ds)}
+                              style={panel === cell.ds ? { background: 'var(--primary-lt)' } : undefined}
+                            >
+                              <div className="cell-head-row" style={spanCount > 0 ? { marginBottom: `${spanCount * 18 + 4}px` } : undefined}>
+                                <span className={`cell-num${isSun || holiday ? ' holiday-num' : isSat ? ' saturday-num' : ''}`}>
+                                  {cell.d}
+                                </span>
                               </div>
-                            ))}
-                            {cellTasks.length > 3 && <div className="more-label">+{cellTasks.length - 3}</div>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
+                              {holiday && <div className="cell-holiday-name">{holiday}</div>}
+                              <div className="cell-tasks">
+                                {cellTasks.slice(0, 3).map(t => (
+                                  <div
+                                    key={t.id}
+                                    className={`cell-task ${t.priority || 'low'}${t.completed ? ' done' : ''}`}
+                                    style={{ borderLeft: `3px solid ${memberColor(t.assigned_to ?? t.created_by)}` }}
+                                    title={`${memberName(t.assigned_to ?? t.created_by)}: ${t.title}`}
+                                  >
+                                    <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: memberColor(t.assigned_to ?? t.created_by), marginRight: 4, flexShrink: 0 }} />
+                                    {t.title}
+                                  </div>
+                                ))}
+                                {cellTasks.length > 3 && <div className="more-label">+{cellTasks.length - 3}</div>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -672,32 +753,37 @@ export default function TeamCalendarPage() {
                     일정이 없습니다
                   </p>
                 ) : panelTasks.map(t => (
-                  <div key={t.id} style={{
-                    padding: '8px 10px', borderRadius: 'var(--radius-sm)',
-                    background: 'var(--bg)', borderLeft: `3px solid ${memberColor(t.assigned_to ?? t.created_by)}`,
-                  }}>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: memberColor(t.assigned_to ?? t.created_by), marginBottom: 2 }}>
-                      {memberName(t.assigned_to ?? t.created_by)}
-                      {(t.assigned_to ?? t.created_by) === user.id && <span style={{ fontSize: '0.68rem', marginLeft: 4, opacity: 0.7 }}>(나)</span>}
-                    </div>
-                    <div style={{
-                      fontSize: '0.83rem', color: 'var(--text)',
-                      textDecoration: t.completed ? 'line-through' : 'none',
-                      opacity: t.completed ? 0.5 : 1,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {t.recurrence && t.recurrence !== 'none' && <i className="fas fa-repeat" style={{ fontSize: '0.6rem', marginRight: 4, opacity: 0.6 }} />}
-                      {t.title}
-                    </div>
-                    {t.priority === 'high' && !t.completed && (
-                      <div style={{ fontSize: '0.7rem', color: 'var(--red-500)', marginTop: 2 }}>
-                        <i className="fas fa-fire" style={{ marginRight: 3 }} />높은 우선순위
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: 'var(--bg)', borderLeft: `3px solid ${memberColor(t.assigned_to ?? t.created_by)}` }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: memberColor(t.assigned_to ?? t.created_by), marginBottom: 2 }}>
+                        {memberName(t.assigned_to ?? t.created_by)}
+                        {(t.assigned_to ?? t.created_by) === user.id && <span style={{ fontSize: '0.68rem', marginLeft: 4, opacity: 0.7 }}>(나)</span>}
                       </div>
-                    )}
-                    {t.due_time && (
-                      <div style={{ fontSize: '0.72rem', color: 'var(--indigo-600)', marginTop: 2 }}>
-                        <i className="fas fa-clock" style={{ marginRight: 3 }} />{t.due_time}
+                      <div style={{ fontSize: '0.83rem', color: 'var(--text)', textDecoration: t.completed ? 'line-through' : 'none', opacity: t.completed ? 0.5 : 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t.recurrence && t.recurrence !== 'none' && <i className="fas fa-repeat" style={{ fontSize: '0.6rem', marginRight: 4, opacity: 0.6 }} />}
+                        {t.title}
                       </div>
+                      {t.priority === 'high' && !t.completed && (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--red-500)', marginTop: 2 }}>
+                          <i className="fas fa-fire" style={{ marginRight: 3 }} />높은 우선순위
+                        </div>
+                      )}
+                      {t.due_time && (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--indigo-600)', marginTop: 2 }}>
+                          <i className="fas fa-clock" style={{ marginRight: 3 }} />{t.due_time}
+                        </div>
+                      )}
+                    </div>
+                    {(t.created_by === user.id || isOwner) && (
+                      <button
+                        onClick={e => { e.stopPropagation(); deleteTeamTask(t.id).then(() => { loadAll(); setPanel(null); }); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: 'var(--text-muted,#9ca3af)', fontSize: '0.8rem', flexShrink: 0, marginTop: 2 }}
+                        onMouseEnter={e => { e.currentTarget.style.color = 'var(--red-500)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted,#9ca3af)'; }}
+                        title="삭제"
+                      >
+                        <i className="fas fa-trash" />
+                      </button>
                     )}
                   </div>
                 ))}

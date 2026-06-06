@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useTheme } from '@/lib/ThemeContext';
 import { getSupabase } from '@/lib/supabase';
 import { requestNotificationPermission, getNotifSettings, setNotifSetting } from '@/lib/useNotifications';
+import { useRouter } from 'next/navigation';
 
 function StrengthBar({ password }) {
   const score = [/.{8,}/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/]
@@ -49,6 +50,117 @@ function Row({ label, sub, children }) {
         {sub && <div style={{ fontSize: '0.78rem', color: 'var(--text-sub)', marginTop: 2 }}>{sub}</div>}
       </div>
       <div style={{ flexShrink: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+/* ── 구독 플랜 섹션 ─────────────────────────────── */
+const PLAN_INFO = {
+  free: { label: '무료',  color: 'var(--text-sub)',      bg: 'var(--bg-sub,rgba(0,0,0,0.04))', icon: 'fa-gift',  limit: 50 },
+  pro:  { label: 'Pro',   color: '#6366f1',               bg: 'rgba(99,102,241,0.07)',           icon: 'fa-bolt',  limit: Infinity },
+  team: { label: 'Team',  color: '#8b5cf6',               bg: 'rgba(139,92,246,0.07)',           icon: 'fa-users', limit: Infinity },
+};
+
+function PlanSection({ user }) {
+  const router = useRouter();
+  const [plan,      setPlan]      = useState('free');
+  const [taskCount, setTaskCount] = useState(0);
+  const [loading,   setLoading]   = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    const sb = getSupabase();
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+    Promise.all([
+      sb.from('user_plans').select('plan').eq('user_id', user.id).maybeSingle(),
+      sb.from('tasks').select('id', { count: 'exact', head: true }).eq('user_id', user.id).gte('created_at', monthStart),
+    ]).then(([planRes, countRes]) => {
+      setPlan(planRes.data?.plan ?? 'free');
+      setTaskCount(countRes.count ?? 0);
+      setLoading(false);
+    });
+  }, [user]);
+
+  if (loading) return <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-sub)' }}><i className="fas fa-spinner fa-spin" /></div>;
+
+  const info       = PLAN_INFO[plan] ?? PLAN_INFO.free;
+  const usagePct   = info.limit === Infinity ? 0 : Math.min(100, Math.round(taskCount / info.limit * 100));
+  const nearLimit  = info.limit !== Infinity && taskCount >= info.limit * 0.8;
+  const hitLimit   = info.limit !== Infinity && taskCount >= info.limit;
+
+  return (
+    <div>
+      {/* 현재 플랜 배지 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, background: info.bg, border: `1px solid ${info.color}50`, marginBottom: 16 }}>
+        <i className={`fas ${info.icon}`} style={{ color: info.color, fontSize: '1.1rem' }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)' }}>
+            {info.label} 플랜
+          </div>
+          <div style={{ fontSize: '0.78rem', marginTop: 2, color: plan === 'free' ? 'var(--text-sub)' : info.color, fontWeight: plan === 'free' ? 400 : 600 }}>
+            {plan === 'free' ? '더 많은 기능이 필요하신가요?' : '모든 기능 사용 가능'}
+          </div>
+        </div>
+        {plan === 'free' && (
+          <button className="btn-primary btn-sm" onClick={() => router.push('/pricing')}>
+            <i className="fas fa-arrow-up" style={{ marginRight: 5 }} />업그레이드
+          </button>
+        )}
+      </div>
+
+      {/* 무료 플랜 사용량 */}
+      {plan === 'free' && (
+        <>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text)' }}>이번 달 할일 사용량</span>
+              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: nearLimit ? (hitLimit ? 'var(--red-500)' : '#f97316') : 'var(--text)' }}>
+                {taskCount} / {info.limit}개
+              </span>
+            </div>
+            <div style={{ height: 8, background: 'var(--border)', borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', width: `${usagePct}%`, borderRadius: 999,
+                background: hitLimit ? 'var(--red-500)' : nearLimit ? '#f97316' : 'var(--indigo-600)',
+                transition: 'width .4s ease',
+              }} />
+            </div>
+            {nearLimit && (
+              <div style={{ marginTop: 6, fontSize: '0.78rem', color: hitLimit ? 'var(--red-500)' : '#f97316', fontWeight: 600 }}>
+                <i className="fas fa-triangle-exclamation" style={{ marginRight: 4 }} />
+                {hitLimit ? '이번 달 한도에 도달했습니다. 새 할일을 추가하려면 업그레이드하세요.' : `이번 달 한도의 ${usagePct}%를 사용했습니다.`}
+              </div>
+            )}
+          </div>
+
+          {/* 업그레이드 혜택 */}
+          <div style={{ padding: '14px 16px', borderRadius: 10, background: 'var(--bg)', border: '1px solid var(--border)' }}>
+            <div style={{ fontWeight: 700, color: 'var(--text)', marginBottom: 10, fontSize: '0.85rem' }}>
+              Pro 업그레이드 혜택
+            </div>
+            {[
+              ['fa-infinity',       '무제한 할일 & 팀 멤버'],
+              ['fa-rotate',         '반복 일정 + 주간·연도 뷰'],
+              ['fa-plug',           'Google Calendar · Notion · Slack 연동'],
+              ['fa-robot',          'AI 스마트 재조정 & PDF 파싱'],
+              ['fa-chart-line',     '고급 통계 & 생산성 분석'],
+            ].map(([icon, text]) => (
+              <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: '0.82rem', color: 'var(--text-sub)' }}>
+                <i className={`fas ${icon}`} style={{ color: 'var(--indigo-600)', width: 14, textAlign: 'center', fontSize: '0.75rem' }} />
+                {text}
+              </div>
+            ))}
+            <button
+              className="btn-primary"
+              style={{ width: '100%', marginTop: 10, justifyContent: 'center', fontSize: '0.88rem' }}
+              onClick={() => router.push('/pricing')}
+            >
+              Pro 플랜 시작 · ₩2,990/월 →
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -188,6 +300,11 @@ export default function SettingsPage() {
               {nameMsg}
             </div>
           )}
+        </Section>
+
+        {/* 구독 & 플랜 */}
+        <Section title="구독 & 플랜" icon="fa-crown">
+          <PlanSection user={user} />
         </Section>
 
         {/* 보안 */}
