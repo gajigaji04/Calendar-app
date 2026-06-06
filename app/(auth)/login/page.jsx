@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/AuthContext';
 import { getSupabase } from '@/lib/supabase';
@@ -75,100 +75,29 @@ function StrengthBar({ password }) {
   );
 }
 
-/* ── OTP 입력 컴포넌트 ── */
-function OtpInput({ value, onChange }) {
-  const inputs = useRef([]);
-  const digits = value.padEnd(6, '').split('').slice(0, 6);
-
-  function handleChange(i, v) {
-    const clean = v.replace(/\D/, '');
-    if (!clean && !v) return;
-    const arr = [...digits];
-    arr[i] = clean.slice(-1);
-    onChange(arr.join(''));
-    if (clean && i < 5) inputs.current[i + 1]?.focus();
-  }
-
-  function handleKeyDown(i, e) {
-    if (e.key === 'Backspace' && !digits[i] && i > 0) {
-      inputs.current[i - 1]?.focus();
-      const arr = [...digits]; arr[i - 1] = '';
-      onChange(arr.join(''));
-    }
-  }
-
-  function handlePaste(e) {
-    const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (text) { onChange(text.padEnd(6, '').slice(0, 6)); inputs.current[Math.min(text.length, 5)]?.focus(); }
-    e.preventDefault();
-  }
-
-  return (
-    <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-      {[0,1,2,3,4,5].map(i => (
-        <input
-          key={i}
-          ref={el => inputs.current[i] = el}
-          type="text" inputMode="numeric" maxLength={1}
-          value={digits[i] || ''}
-          onChange={e => handleChange(i, e.target.value)}
-          onKeyDown={e => handleKeyDown(i, e)}
-          onPaste={handlePaste}
-          style={{
-            width: 44, height: 52, textAlign: 'center', fontSize: '20px', fontWeight: 700,
-            background: digits[i] ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.06)',
-            border: `1px solid ${digits[i] ? 'rgba(99,102,241,0.6)' : 'rgba(255,255,255,0.15)'}`,
-            borderRadius: 10, color: '#f0f0ff', outline: 'none',
-            transition: 'all .15s', fontFamily: 'monospace',
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
 /* ═══════════════════════════════════════
    메인 페이지
 ═══════════════════════════════════════ */
 export default function LoginPage() {
-  const { signIn, sendVerificationCode, verifyEmailCode, resendVerificationCode, resetPassword } = useAuth();
+  const { signIn, signUp, resetPassword } = useAuth();
 
-  // mode: 'login' | 'register' | 'verify' | 'forgot'
-  const [mode,            setMode]            = useState('login');
-  const [name,            setName]            = useState('');
-  const [email,           setEmail]           = useState('');
-  const [password,        setPassword]        = useState('');
-  const [pwConfirm,       setPwConfirm]       = useState('');
-  const [otp,             setOtp]             = useState('');
-  const [pendingEmail,    setPendingEmail]    = useState('');
-  const [pendingPassword, setPendingPassword] = useState('');
-  const [pendingName,     setPendingName]     = useState('');
-  const [agreeTerms,      setAgreeTerms]      = useState(false);
-  const [agreePrivacy,    setAgreePrivacy]    = useState(false);
-  const [loading,         setLoading]         = useState(false);
-  const [socialLoading,   setSocialLoading]   = useState('');
-  const [error,           setError]           = useState('');
-  const [success,         setSuccess]         = useState('');
-  const [focusedField,    setFocusedField]    = useState('');
-  const [hoveredSocial,   setHoveredSocial]   = useState('');
-  const [resendCooldown,  setResendCooldown]  = useState(0);
-  const [codeExpiry,      setCodeExpiry]      = useState(0); // 남은 초
-
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const id = setTimeout(() => setResendCooldown(c => c - 1), 1000);
-    return () => clearTimeout(id);
-  }, [resendCooldown]);
-
-  useEffect(() => {
-    if (codeExpiry <= 0) return;
-    const id = setTimeout(() => setCodeExpiry(c => c - 1), 1000);
-    return () => clearTimeout(id);
-  }, [codeExpiry]);
+  // mode: 'login' | 'register' | 'forgot'
+  const [mode,          setMode]          = useState('login');
+  const [name,          setName]          = useState('');
+  const [email,         setEmail]         = useState('');
+  const [password,      setPassword]      = useState('');
+  const [pwConfirm,     setPwConfirm]     = useState('');
+  const [agreeTerms,    setAgreeTerms]    = useState(false);
+  const [agreePrivacy,  setAgreePrivacy]  = useState(false);
+  const [loading,       setLoading]       = useState(false);
+  const [socialLoading, setSocialLoading] = useState('');
+  const [error,         setError]         = useState('');
+  const [success,       setSuccess]       = useState('');
+  const [focusedField,  setFocusedField]  = useState('');
+  const [hoveredSocial, setHoveredSocial] = useState('');
 
   function reset() { setError(''); setSuccess(''); }
-
-  function goMode(m) { reset(); setOtp(''); setMode(m); }
+  function goMode(m) { reset(); setMode(m); }
 
   function fieldStyle(id) {
     return {
@@ -195,10 +124,6 @@ export default function LoginPage() {
       const msg = err.message || '';
       if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
         setError('__INVALID_CREDENTIALS__');
-      } else if (msg.includes('Email not confirmed')) {
-        setPendingEmail(email);
-        setError('이메일 인증이 완료되지 않았습니다. 인증 코드를 확인해주세요.');
-        setTimeout(() => goMode('verify'), 1500);
       } else {
         setError(msg);
       }
@@ -215,51 +140,12 @@ export default function LoginPage() {
     if (!agreeTerms)            { setError('이용약관에 동의해주세요.'); return; }
     if (!agreePrivacy)          { setError('개인정보처리방침에 동의해주세요.'); return; }
     setLoading(true);
-    const result = await sendVerificationCode(email, name);
-    if (result.error) {
-      setError(result.error);
+    const err = await signUp(email, password, name);
+    if (err) {
+      setError(err.message);
     } else {
-      setPendingEmail(email);
-      setPendingPassword(password);
-      setPendingName(name);
-      setOtp('');
-      setMode('verify');
-      setResendCooldown(60);
-      setCodeExpiry(300);
-      if (result.devMode) {
-        setSuccess('SMTP 미설정 — 서버 콘솔에서 인증 코드를 확인하세요.');
-      }
-    }
-    setLoading(false);
-  }
-
-  /* ── 인증 코드 확인 ── */
-  async function handleVerify(e) {
-    e.preventDefault(); reset();
-    if (otp.replace(/\s/g, '').length !== 6) {
-      setError('6자리 인증 코드를 모두 입력해주세요.'); return;
-    }
-    setLoading(true);
-    const result = await verifyEmailCode(pendingEmail, otp, pendingPassword, pendingName);
-    if (result.error) {
-      setError(result.error);
-    } else {
-      setSuccess('인증 완료! 대시보드로 이동합니다 🎉');
-    }
-    setLoading(false);
-  }
-
-  /* ── 코드 재전송 ── */
-  async function handleResend() {
-    if (resendCooldown > 0) return;
-    setLoading(true); reset(); setOtp('');
-    const result = await resendVerificationCode(pendingEmail, pendingName);
-    if (result.error) {
-      setError(result.error);
-    } else {
-      setSuccess('새 인증 코드를 발송했습니다. 메일함을 확인하세요.');
-      setResendCooldown(60);
-      setCodeExpiry(300);
+      setSuccess('계정이 생성됐습니다! 로그인해주세요 🎉');
+      setTimeout(() => { goMode('login'); setEmail(email); }, 1500);
     }
     setLoading(false);
   }
@@ -285,7 +171,7 @@ export default function LoginPage() {
             아직 계정이 없으신가요?{' '}
             <button
               type="button"
-              onClick={() => { goMode('register'); setEmail(email); }}
+              onClick={() => { goMode('register'); }}
               style={{ color: '#818cf8', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', padding: 0, fontFamily: 'inherit' }}
             >
               회원가입 후 진행해주세요 →
@@ -329,10 +215,9 @@ export default function LoginPage() {
   }
 
   const MODE_CONFIG = {
-    login:    { emoji: '👋', title: '다시 오셨군요',   sub: null },
-    register: { emoji: '✨', title: '계정 만들기',     sub: null },
-    verify:   { emoji: '📨', title: '이메일 인증',      sub: `${pendingEmail || '이메일'}로 발송된 6자리 코드를 입력하세요` },
-    forgot:   { emoji: '🔐', title: '비밀번호 찾기',   sub: '가입 시 사용한 이메일을 입력하면 재설정 링크를 보내드려요' },
+    login:  { emoji: '👋', title: '다시 오셨군요', sub: null },
+    register: { emoji: '✨', title: '계정 만들기', sub: null },
+    forgot: { emoji: '🔐', title: '비밀번호 찾기', sub: '가입 시 사용한 이메일을 입력하면 재설정 링크를 보내드려요' },
   };
   const { emoji, title, sub } = MODE_CONFIG[mode];
 
@@ -386,7 +271,6 @@ export default function LoginPage() {
         {/* ═══ LOGIN ═══ */}
         {mode === 'login' && (
           <>
-            {/* 소셜 */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
               {SOCIAL.map(({ id, label, Icon, bg, border, color, hoverBg }) => (
                 <button key={id} onClick={() => handleSocial(id)} disabled={!!socialLoading}
@@ -481,58 +365,6 @@ export default function LoginPage() {
             <Feedback />
             <SubmitBtn label="가입하기" loadingLabel="처리 중..." />
           </form>
-        )}
-
-        {/* ═══ VERIFY ═══ */}
-        {mode === 'verify' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-            {/* 발송 안내 */}
-            <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>
-              <span style={{ color: '#a5b4fc', fontWeight: 700 }}>{pendingEmail}</span> 으로<br/>
-              6자리 인증 코드를 발송했습니다.
-            </div>
-
-            {/* OTP 입력 */}
-            <div style={{ textAlign: 'center' }}>
-              <OtpInput value={otp} onChange={setOtp} />
-
-              {/* 만료 타이머 */}
-              <div style={{ marginTop: 12, fontSize: 12, color: codeExpiry > 60 ? 'rgba(255,255,255,0.3)' : codeExpiry > 0 ? '#f97316' : '#ef4444' }}>
-                {codeExpiry > 0
-                  ? `유효 시간 ${Math.floor(codeExpiry / 60)}:${String(codeExpiry % 60).padStart(2, '0')} 남음`
-                  : '⚠ 코드가 만료되었습니다. 재전송해주세요.'}
-              </div>
-            </div>
-
-            <Feedback />
-
-            <form onSubmit={handleVerify} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <SubmitBtn label="인증 완료" loadingLabel="확인 중..." />
-            </form>
-
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 16, fontSize: 13 }}>
-              <button
-                onClick={handleResend}
-                disabled={resendCooldown > 0 || loading}
-                style={{ background: 'none', border: 'none', color: resendCooldown > 0 ? 'rgba(255,255,255,0.3)' : '#818cf8', fontWeight: 600, cursor: resendCooldown > 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 13, padding: 0 }}
-              >
-                {resendCooldown > 0 ? `재전송 (${resendCooldown}s)` : '코드 재전송'}
-              </button>
-              <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
-              <button
-                type="button"
-                onClick={() => { goMode('login'); setPendingPassword(''); setPendingName(''); }}
-                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, padding: 0 }}
-              >
-                로그인으로 돌아가기
-              </button>
-            </div>
-
-            <p style={{ textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,0.25)', margin: 0 }}>
-              메일이 안 보이면 스팸함을 확인해주세요
-            </p>
-          </div>
         )}
 
         {/* ═══ FORGOT ═══ */}

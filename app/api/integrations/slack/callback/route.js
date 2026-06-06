@@ -32,6 +32,12 @@ export async function GET(request) {
   }
 
   // Authorization Code → Access Token 교환
+  const slackClientId     = process.env.SLACK_CLIENT_ID;
+  const slackClientSecret = process.env.SLACK_CLIENT_SECRET;
+  if (!slackClientId || !slackClientSecret) {
+    return NextResponse.redirect(`${origin}/integrations?error=slack_not_configured`);
+  }
+
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/slack/callback`;
 
   let tokenData;
@@ -40,8 +46,8 @@ export async function GET(request) {
       method:  'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id:     process.env.SLACK_CLIENT_ID     ?? '',
-        client_secret: process.env.SLACK_CLIENT_SECRET ?? '',
+        client_id:     slackClientId,
+        client_secret: slackClientSecret,
         code,
         redirect_uri:  redirectUri,
       }),

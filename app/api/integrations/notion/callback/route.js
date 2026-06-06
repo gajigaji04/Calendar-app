@@ -32,10 +32,14 @@ export async function GET(request) {
   }
 
   // Authorization Code → Access Token 교환
+  const notionClientId     = process.env.NOTION_CLIENT_ID;
+  const notionClientSecret = process.env.NOTION_CLIENT_SECRET;
+  if (!notionClientId || !notionClientSecret) {
+    return NextResponse.redirect(`${origin}/integrations?error=notion_not_configured`);
+  }
+
   const redirectUri   = `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/notion/callback`;
-  const credentials   = Buffer.from(
-    `${process.env.NOTION_CLIENT_ID}:${process.env.NOTION_CLIENT_SECRET}`
-  ).toString('base64');
+  const credentials   = Buffer.from(`${notionClientId}:${notionClientSecret}`).toString('base64');
 
   let tokenData;
   try {

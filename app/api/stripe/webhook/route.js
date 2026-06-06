@@ -43,12 +43,17 @@ export async function POST(request) {
   }
   const stripe = new Stripe(stripeKey, { apiVersion: '2024-11-20' });
 
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return NextResponse.json({ error: 'Webhook secret이 설정되지 않았습니다.' }, { status: 503 });
+  }
+
   const body      = await request.text();
   const signature = request.headers.get('stripe-signature') ?? '';
 
   let event;
   try {
-    event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET ?? '');
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
   } catch (e) {
     return NextResponse.json({ error: `Webhook 서명 오류: ${e.message}` }, { status: 400 });
   }
