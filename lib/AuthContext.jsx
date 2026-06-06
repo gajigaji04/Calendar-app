@@ -18,16 +18,13 @@ export function AuthProvider({ children }) {
     });
     const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
-      if (event === 'SIGNED_IN')  router.push('/dashboard');
-      if (event === 'SIGNED_OUT') router.push('/');
+      if (event === 'SIGNED_IN') router.push('/dashboard');
     });
     return () => subscription.unsubscribe();
   }, [router]);
 
   const signIn = useCallback(async (email, password) => {
-    const sb = getSupabase();
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) await sb.auth.signOut(); // stale 세션 제거
+    const { error } = await getSupabase().auth.signInWithPassword({ email, password });
     return error;
   }, []);
 
@@ -45,7 +42,10 @@ export function AuthProvider({ children }) {
     return signInErr ?? null;
   }, []);
 
-  const signOut = useCallback(() => getSupabase().auth.signOut(), []);
+  const signOut = useCallback(async () => {
+    await getSupabase().auth.signOut();
+    router.push('/');
+  }, [router]);
 
   /** 이메일로 6자리 인증 코드 전송 */
   const sendVerificationCode = useCallback(async (email, name) => {
