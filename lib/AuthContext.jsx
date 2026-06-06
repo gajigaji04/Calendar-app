@@ -36,9 +36,9 @@ export function AuthProvider({ children }) {
       options: { data: { name } },
     });
     if (error) return error;
-    // Confirm email이 OFF인 경우 session이 바로 내려옴 → 자동 로그인
+    // Confirm email OFF → session 즉시 반환 → onAuthStateChange가 처리
     if (data?.session) return null;
-    // Confirm email이 ON인 경우 → signInWithPassword 시도
+    // 혹시 session이 없으면 바로 signIn 시도
     const { error: signInErr } = await sb.auth.signInWithPassword({ email, password });
     return signInErr ?? null;
   }, []);
