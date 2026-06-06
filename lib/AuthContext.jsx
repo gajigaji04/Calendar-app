@@ -30,11 +30,17 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signUp = useCallback(async (email, password, name) => {
-    const { error } = await getSupabase().auth.signUp({
+    const sb = getSupabase();
+    const { data, error } = await sb.auth.signUp({
       email, password,
       options: { data: { name } },
     });
-    return error;
+    if (error) return error;
+    // Confirm email이 OFF인 경우 session이 바로 내려옴 → 자동 로그인
+    if (data?.session) return null;
+    // Confirm email이 ON인 경우 → signInWithPassword 시도
+    const { error: signInErr } = await sb.auth.signInWithPassword({ email, password });
+    return signInErr ?? null;
   }, []);
 
   const signOut = useCallback(() => getSupabase().auth.signOut(), []);

@@ -144,8 +144,7 @@ export default function LoginPage() {
     if (err) {
       setError(err.message);
     } else {
-      setSuccess('계정이 생성됐습니다! 로그인해주세요 🎉');
-      setTimeout(() => { goMode('login'); setEmail(email); }, 1500);
+      setSuccess('계정이 생성됐습니다! 잠시 후 이동합니다...');
     }
     setLoading(false);
   }
