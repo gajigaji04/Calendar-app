@@ -25,7 +25,9 @@ export function AuthProvider({ children }) {
   }, [router]);
 
   const signIn = useCallback(async (email, password) => {
-    const { error } = await getSupabase().auth.signInWithPassword({ email, password });
+    const sb = getSupabase();
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) await sb.auth.signOut(); // stale 세션 제거
     return error;
   }, []);
 

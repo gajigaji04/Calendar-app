@@ -122,7 +122,9 @@ export default function LoginPage() {
     const err = await signIn(email, password);
     if (err) {
       const msg = err.message || '';
-      if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
+      if (msg.toLowerCase().includes('email not confirmed') || msg.includes('email_not_confirmed')) {
+        setError('__EMAIL_NOT_CONFIRMED__');
+      } else if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials')) {
         setError('__INVALID_CREDENTIALS__');
       } else {
         setError(msg);
@@ -162,6 +164,16 @@ export default function LoginPage() {
 
   /* ── 공통 렌더링 헬퍼 ── */
   function Feedback() {
+    if (error === '__EMAIL_NOT_CONFIRMED__') {
+      return (
+        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 10, padding: '12px 14px', fontSize: '13px', color: '#fca5a5' }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>⚠ 이메일 인증이 완료되지 않은 계정입니다.</div>
+          <div style={{ color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>
+            Supabase 대시보드 → Authentication → Users에서 해당 계정을 삭제 후 다시 가입해주세요.
+          </div>
+        </div>
+      );
+    }
     if (error === '__INVALID_CREDENTIALS__') {
       return (
         <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 10, padding: '12px 14px', fontSize: '13px', color: '#fca5a5' }}>
