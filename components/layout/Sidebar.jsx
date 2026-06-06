@@ -10,6 +10,8 @@ const NAV = [
   { href: '/tools',        icon: 'fa-wand-magic-sparkles', label: '도구' },
   { href: '/integrations', icon: 'fa-plug',              label: '연동' },
   { href: '/teams',        icon: 'fa-users',             label: '팀' },
+  { href: '/alarm',        icon: 'fa-bell',              label: '알람' },
+  { href: '/calculator',   icon: 'fa-calculator',        label: '계산기' },
   { href: '/settings',  icon: 'fa-gear',           label: '설정' },
 ];
 
