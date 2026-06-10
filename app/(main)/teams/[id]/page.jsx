@@ -222,6 +222,9 @@ export default function TeamCalendarPage() {
   const [addModal,      setAddModal]      = useState(null); // 날짜 패널에서 할일 추가
   const [tab,           setTab]           = useState('calendar');
   const [copied,        setCopied]        = useState(false);
+  const [inviteEmail,   setInviteEmail]   = useState('');
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteMsg,     setInviteMsg]     = useState(null); // {type:'ok'|'err', text}
   const [filterMembers, setFilterMembers] = useState(new Set());
   const [transferTarget,  setTransferTarget]  = useState(null);
   const [transferring,    setTransferring]    = useState(false);
@@ -298,6 +301,27 @@ export default function TeamCalendarPage() {
     if (!confirm('초대 코드를 재발급하면 기존 코드는 사용할 수 없습니다. 계속하시겠습니까?')) return;
     const newCode = await regenerateInviteCode(teamId);
     setTeam(t => ({ ...t, invite_code: newCode }));
+  }
+
+  async function handleEmailInvite(e) {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setInviteSending(true); setInviteMsg(null);
+    try {
+      const res = await fetch('/api/teams/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId, email: inviteEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '전송 실패');
+      setInviteMsg({ type: 'ok', text: data.devMode ? `[개발모드] 콘솔에서 링크 확인` : `${inviteEmail}로 초대 이메일을 보냈습니다.` });
+      setInviteEmail('');
+    } catch (ex) {
+      setInviteMsg({ type: 'err', text: ex.message });
+    } finally {
+      setInviteSending(false);
+    }
   }
 
   async function handleRemove(member) {
@@ -915,6 +939,41 @@ export default function TeamCalendarPage() {
                 </button>
               )}
             </div>
+          </div>
+
+          {/* 이메일로 초대 */}
+          <div className="card" style={{ marginBottom: 16, padding: '14px 18px' }}>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-sub)', marginBottom: 10 }}>
+              <i className="fas fa-envelope" style={{ marginRight: 6 }} />이메일로 초대
+            </div>
+            <form onSubmit={handleEmailInvite} style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                placeholder="초대할 이메일 입력"
+                style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 8, fontSize: '0.85rem',
+                  background: 'var(--bg)', border: '1px solid var(--border)',
+                  color: 'var(--text)', outline: 'none',
+                }}
+              />
+              <button
+                type="submit"
+                disabled={inviteSending || !inviteEmail.trim()}
+                className="btn-primary btn-sm"
+              >
+                {inviteSending ? <i className="fas fa-spinner fa-spin" /> : '초대 전송'}
+              </button>
+            </form>
+            {inviteMsg && (
+              <p style={{
+                marginTop: 8, fontSize: '0.78rem',
+                color: inviteMsg.type === 'ok' ? 'var(--green-500, #22c55e)' : 'var(--red-400, #f87171)',
+              }}>
+                {inviteMsg.type === 'ok' ? '✓ ' : '⚠ '}{inviteMsg.text}
+              </p>
+            )}
           </div>
 
           {/* 멤버 목록 */}
