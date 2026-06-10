@@ -220,7 +220,7 @@ export default function DashboardPage() {
             <button type="submit" className="btn-primary btn-sm" disabled={aiLoading || !aiInput.trim()}>
               {aiLoading
                 ? <i className="fas fa-spinner fa-spin" />
-                : <><i className="fas fa-sparkles" style={{ marginRight: 5 }} />추가</>}
+                : <><i className="fas fa-sparkles" />추가</>}
             </button>
           </form>
           {aiPreview && (
