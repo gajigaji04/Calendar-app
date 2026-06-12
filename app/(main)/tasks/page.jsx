@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
-import { getTasksByUser, getTasksByDateRange, toggleComplete } from '@/models/taskModel';
+import { getTasksByUser, getTasksByDateRange, toggleComplete, deleteTask } from '@/models/taskModel';
 import { useDeadlineAlerts } from '@/lib/useDeadlineAlerts';
 import TaskModal from '@/components/task/TaskModal';
 import SmartRescheduleModal from '@/components/schedule/SmartRescheduleModal';
@@ -157,6 +157,8 @@ function TasksPageInner() {
   const [modal,         setModal]         = useState(null);
   const [exportOpen,    setExportOpen]    = useState(false);
   const [smartOpen,     setSmartOpen]     = useState(false);
+  const [selectedIds,   setSelectedIds]   = useState(new Set());
+  const [deleting,      setDeleting]      = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -239,6 +241,49 @@ function TasksPageInner() {
     }
   }
 
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filtered.length && filtered.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(t => t.id)));
+    }
+  }
+
+  async function handleDeleteSelected() {
+    if (!selectedIds.size || deleting) return;
+    if (!window.confirm(`선택한 ${selectedIds.size}개의 할일을 삭제할까요?`)) return;
+    setDeleting(true);
+    for (const id of selectedIds) {
+      await deleteTask(id);
+    }
+    setSelectedIds(new Set());
+    setDeleting(false);
+    load();
+    refreshAlerts();
+  }
+
+  async function handleDeleteCompleted() {
+    const ids = filtered.filter(t => t.completed).map(t => t.id);
+    if (!ids.length || deleting) return;
+    if (!window.confirm(`완료된 ${ids.length}개의 할일을 삭제할까요?`)) return;
+    setDeleting(true);
+    for (const id of ids) {
+      await deleteTask(id);
+    }
+    setSelectedIds(new Set());
+    setDeleting(false);
+    load();
+    refreshAlerts();
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="view-header">
@@ -246,7 +291,18 @@ function TasksPageInner() {
           <h2>내 할일</h2>
           <p className="view-sub">할일을 관리하고 완료 상태를 추적하세요</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {filtered.some(t => t.completed) && (
+            <button
+              className="btn-secondary"
+              onClick={handleDeleteCompleted}
+              disabled={deleting}
+              style={{ color: 'var(--red-500)' }}
+              title="필터된 완료 항목 전부 삭제"
+            >
+              <i className="fas fa-trash-check" /> 완료 항목 삭제
+            </button>
+          )}
           <button className="btn-secondary" onClick={() => setExportOpen(true)}>
             <i className="fas fa-file-export" /> 내보내기
           </button>
@@ -338,6 +394,31 @@ function TasksPageInner() {
         </select>
       </div>
 
+      {/* 선택 액션 바 */}
+      {selectedIds.size > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '8px 20px', margin: '0 0 4px',
+          background: 'var(--indigo-50)', borderTop: '1px solid rgba(99,102,241,0.2)', borderBottom: '1px solid rgba(99,102,241,0.2)',
+        }}>
+          <span style={{ fontSize: '0.83rem', fontWeight: 600, color: 'var(--indigo-600)', flex: 1 }}>
+            <i className="fas fa-check-square" style={{ marginRight: 6 }} />
+            {selectedIds.size}개 선택됨
+          </span>
+          <button
+            className="btn-primary btn-sm"
+            onClick={handleDeleteSelected}
+            disabled={deleting}
+            style={{ background: 'var(--red-500)', borderColor: 'var(--red-500)' }}
+          >
+            <i className="fas fa-trash" /> {deleting ? '삭제 중...' : '선택 삭제'}
+          </button>
+          <button className="btn-secondary btn-sm" onClick={() => setSelectedIds(new Set())}>
+            취소
+          </button>
+        </div>
+      )}
+
       {/* 목록 */}
       <div className="card" style={{ padding: 0, overflow: 'hidden', margin: '4px 20px 20px' }}>
         {filtered.length === 0 ? (
@@ -345,68 +426,118 @@ function TasksPageInner() {
             <i className="fas fa-check-circle" style={{ fontSize: '2rem', marginBottom: 12, display: 'block', color: 'var(--border)' }} />
             {search ? `"${search}" 검색 결과가 없습니다` : '할일이 없습니다'}
           </div>
-        ) : filtered.map((t, i) => {
-          const dl = getDeadlineInfo(t);
-          return (
-            <div
-              key={t.id}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '14px 20px',
-                borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none',
-                borderLeft: t.color ? `4px solid ${t.color}` : '4px solid transparent',
-              }}
-            >
+        ) : (
+          <>
+            {/* 전체 선택 행 */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '9px 20px', borderBottom: '1px solid var(--border)',
+              background: 'var(--surface)',
+            }}>
               <button
-                onClick={() => handleToggle(t.id, t.completed)}
+                onClick={toggleSelectAll}
+                title={selectedIds.size === filtered.length ? '전체 해제' : '전체 선택'}
                 style={{
-                  width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                  border: `2px solid ${t.completed ? 'var(--indigo-600)' : 'var(--border)'}`,
-                  background: t.completed ? 'var(--indigo-600)' : 'transparent',
+                  width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                  border: `2px solid ${selectedIds.size === filtered.length && filtered.length > 0 ? 'var(--indigo-600)' : 'var(--border)'}`,
+                  background: selectedIds.size === filtered.length && filtered.length > 0 ? 'var(--indigo-600)' : 'transparent',
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff', fontSize: '0.65rem', transition: 'all .12s',
+                  color: '#fff', fontSize: '0.6rem', transition: 'all .12s',
                 }}
               >
-                {t.completed && <i className="fas fa-check" />}
+                {selectedIds.size === filtered.length && filtered.length > 0 && <i className="fas fa-check" />}
+                {selectedIds.size > 0 && selectedIds.size < filtered.length && (
+                  <span style={{ width: 8, height: 2, background: 'var(--indigo-600)', borderRadius: 1, display: 'block' }} />
+                )}
               </button>
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontSize: '0.92rem', color: 'var(--text)', fontWeight: 500,
-                  textDecoration: t.completed ? 'line-through' : 'none',
-                  opacity: t.completed ? 0.45 : 1,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>
-                  {t.recurrence && t.recurrence !== 'none' && (
-                    <i className="fas fa-repeat" style={{ fontSize: '0.72rem', marginRight: 5, color: 'var(--primary)', opacity: 0.7 }} />
-                  )}
-                  {t.title}
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-sub)', marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span><i className="fas fa-calendar" style={{ marginRight: 4 }} />{t.date}</span>
-                  {t.due_time && (
-                    <span style={{ color: 'var(--indigo-600)' }}>
-                      <i className="fas fa-clock" style={{ marginRight: 4 }} />{t.due_time}까지
-                    </span>
-                  )}
-                  {t.deadline && (
-                    dl
-                      ? <span className={`deadline-badge ${dl.cls}`}><i className="fas fa-flag" /> {dl.label}</span>
-                      : <span><i className="fas fa-flag" style={{ marginRight: 4 }} />마감 {t.deadline}</span>
-                  )}
-                </div>
-              </div>
-
-              <span style={{ fontSize: '0.75rem', color: PRIORITY_COLOR[t.priority], fontWeight: 600, flexShrink: 0 }}>
-                {PRIORITY_LABEL[t.priority]}
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-sub)', fontWeight: 500 }}>
+                전체 선택 ({filtered.length}개)
               </span>
-
-              <button className="icon-btn" onClick={() => setModal(t)} style={{ flexShrink: 0 }}>
-                <i className="fas fa-ellipsis-v" />
-              </button>
             </div>
-          );
-        })}
+
+            {filtered.map((t, i) => {
+              const dl = getDeadlineInfo(t);
+              const isSelected = selectedIds.has(t.id);
+              return (
+                <div
+                  key={t.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '14px 20px',
+                    borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none',
+                    borderLeft: t.color ? `4px solid ${t.color}` : '4px solid transparent',
+                    background: isSelected ? 'rgba(99,102,241,0.04)' : undefined,
+                    transition: 'background .1s',
+                  }}
+                >
+                  {/* 선택 체크박스 */}
+                  <button
+                    onClick={() => toggleSelect(t.id)}
+                    title="선택"
+                    style={{
+                      width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                      border: `2px solid ${isSelected ? 'var(--indigo-600)' : 'var(--border)'}`,
+                      background: isSelected ? 'var(--indigo-600)' : 'transparent',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontSize: '0.6rem', transition: 'all .12s',
+                    }}
+                  >
+                    {isSelected && <i className="fas fa-check" />}
+                  </button>
+
+                  {/* 완료 토글 */}
+                  <button
+                    onClick={() => handleToggle(t.id, t.completed)}
+                    style={{
+                      width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                      border: `2px solid ${t.completed ? 'var(--indigo-600)' : 'var(--border)'}`,
+                      background: t.completed ? 'var(--indigo-600)' : 'transparent',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontSize: '0.65rem', transition: 'all .12s',
+                    }}
+                  >
+                    {t.completed && <i className="fas fa-check" />}
+                  </button>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: '0.92rem', color: 'var(--text)', fontWeight: 500,
+                      textDecoration: t.completed ? 'line-through' : 'none',
+                      opacity: t.completed ? 0.45 : 1,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      {t.recurrence && t.recurrence !== 'none' && (
+                        <i className="fas fa-repeat" style={{ fontSize: '0.72rem', marginRight: 5, color: 'var(--primary)', opacity: 0.7 }} />
+                      )}
+                      {t.title}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-sub)', marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span><i className="fas fa-calendar" style={{ marginRight: 4 }} />{t.date}</span>
+                      {t.due_time && (
+                        <span style={{ color: 'var(--indigo-600)' }}>
+                          <i className="fas fa-clock" style={{ marginRight: 4 }} />{t.due_time}까지
+                        </span>
+                      )}
+                      {t.deadline && (
+                        dl
+                          ? <span className={`deadline-badge ${dl.cls}`}><i className="fas fa-flag" /> {dl.label}</span>
+                          : <span><i className="fas fa-flag" style={{ marginRight: 4 }} />마감 {t.deadline}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <span style={{ fontSize: '0.75rem', color: PRIORITY_COLOR[t.priority], fontWeight: 600, flexShrink: 0 }}>
+                    {PRIORITY_LABEL[t.priority]}
+                  </span>
+
+                  <button className="icon-btn" onClick={() => setModal(t)} style={{ flexShrink: 0 }}>
+                    <i className="fas fa-ellipsis-v" />
+                  </button>
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
 
       {modal && (

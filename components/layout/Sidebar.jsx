@@ -6,6 +6,7 @@ const NAV = [
   { href: '/dashboard', icon: 'fa-house',          label: '대시보드' },
   { href: '/calendar',  icon: 'fa-calendar-days',  label: '캘린더' },
   { href: '/tasks',     icon: 'fa-list-check',     label: '할일' },
+  { href: '/planner',   icon: 'fa-clipboard-check', label: '플래너' },
   { href: '/stats',     icon: 'fa-chart-line',     label: '통계' },
   { href: '/tools',        icon: 'fa-wand-magic-sparkles', label: '도구' },
   { href: '/integrations', icon: 'fa-plug',              label: '연동' },

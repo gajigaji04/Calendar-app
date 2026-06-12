@@ -12,13 +12,21 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const sb = getSupabase();
+
+    // 익명 세션은 비로그인으로 처리
+    function resolveUser(session) {
+      return session?.user?.is_anonymous ? null : (session?.user ?? null);
+    }
+
     sb.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+      setUser(resolveUser(session));
       setLoading(false);
     });
     const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-      if (event === 'SIGNED_IN') router.push('/dashboard');
+      const u = resolveUser(session);
+      setUser(u);
+      // 실제 로그인(비익명)일 때만 대시보드로 이동
+      if (event === 'SIGNED_IN' && u) router.push('/dashboard');
     });
     return () => subscription.unsubscribe();
   }, [router]);

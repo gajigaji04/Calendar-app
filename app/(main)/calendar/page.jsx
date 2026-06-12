@@ -699,7 +699,7 @@ function MonthView({ year, month, tasks, teamTasks = [], todayStr, onDayClick, o
                     {holiday && <div className="cell-holiday-name">{holiday}</div>}
 
                     <div className="cell-tasks">
-                      {cellTasks.slice(0, 2).map(t => {
+                      {cellTasks.slice(0, 3).map(t => {
                         const dl = getDeadlineInfo(t);
                         return (
                           <div
@@ -716,6 +716,7 @@ function MonthView({ year, month, tasks, teamTasks = [], todayStr, onDayClick, o
                             onTouchMove={e => { e.stopPropagation(); onTouchMove(e); }}
                             onTouchEnd={e => { e.stopPropagation(); onTouchEnd(e); }}
                           >
+                            {t.priority === 'high' && !t.completed && <i className="fas fa-star" style={{ fontSize: '0.5rem', marginRight: 3, color: '#d97706', opacity: 0.9 }} />}
                             {t.recurrence && t.recurrence !== 'none' && <i className="fas fa-repeat" style={{ fontSize: '0.6rem', marginRight: 3, opacity: 0.6 }} />}
                             {t.title}{dl && <> <span className={`cell-dl ${dl.cls}`}>{dl.label}</span></>}
                           </div>
@@ -737,9 +738,9 @@ function MonthView({ year, month, tasks, teamTasks = [], todayStr, onDayClick, o
                           {t.title}
                         </div>
                       ))}
-                      {(cellTasks.length > 2 || cellTeamTasks.length > 1) && (
+                      {(cellTasks.length > 3 || cellTeamTasks.length > 1) && (
                         <div className="more-label">
-                          +{Math.max(0, cellTasks.length - 2) + Math.max(0, cellTeamTasks.length - 1)}
+                          +{Math.max(0, cellTasks.length - 3) + Math.max(0, cellTeamTasks.length - 1)}
                         </div>
                       )}
                     </div>
