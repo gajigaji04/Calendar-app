@@ -80,13 +80,13 @@ function StrengthBar({ password }) {
    메인 페이지
 ═══════════════════════════════════════ */
 export default function LoginPage() {
-  const { user, loading, signIn, signUp, resetPassword } = useAuth();
+  const { user, loading: authLoading, signIn, signUp, resetPassword } = useAuth();
   const router = useRouter();
 
   // 이미 로그인된 경우 대시보드로 리다이렉트
   useEffect(() => {
-    if (!loading && user) router.replace('/dashboard');
-  }, [user, loading, router]);
+    if (!authLoading && user) router.replace('/dashboard');
+  }, [user, authLoading, router]);
 
   // mode: 'login' | 'register' | 'forgot'
   const [mode,          setMode]          = useState('login');
